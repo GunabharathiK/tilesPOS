@@ -5,3 +5,6 @@ export const saveCustomer = (data) =>
 
 export const getCustomers = () =>
   API.get("/customers");
+
+export const getCustomerInvoices = () =>
+  API.get("/invoices");

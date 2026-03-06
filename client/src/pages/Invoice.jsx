@@ -5,11 +5,19 @@ import {
   Typography,
   Card,
   IconButton,
-  MenuItem,
   Grid,
   Divider,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Paper,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
+import EditIcon from "@mui/icons-material/Edit";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import { useState, useEffect } from "react";
 import { getProducts } from "../services/productService";
 import API from "../services/api";
@@ -19,23 +27,21 @@ import InvoicePrint from "../components/billing/InvoicePrint";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-const Invoice = () => {
+const emptyCustomer = {
+  name: "",
+  phone: "",
+  address: "",
+};
+
+const Invoice = ({ mode = "invoice" }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state;
+  const isQuotation = mode === "quotation";
 
   const [products, setProducts] = useState([]);
   const [items, setItems] = useState([]);
-
-  const [customer, setCustomer] = useState({
-    name: "",
-    phone: "",
-    address: "",
-    district: "",
-    state: "",
-    pincode: "",
-  });
-
+  const [customer, setCustomer] = useState(emptyCustomer);
   const [tax, setTax] = useState("");
   const [discount, setDiscount] = useState("");
   const [activeIndex, setActiveIndex] = useState(null);
@@ -43,41 +49,61 @@ const Invoice = () => {
   const [invoiceData, setInvoiceData] = useState(null);
   const [isPaid, setIsPaid] = useState(false);
 
-  useEffect(() => { fetchProducts(); }, []);
+  const [customerLocked, setCustomerLocked] = useState(false);
+  const [itemLocks, setItemLocks] = useState([]);
 
-  const fetchProducts = async () => {
-    const res = await getProducts();
-    setProducts(res.data);
+  const itemHeadCellSx = {
+    fontSize: 13,
+    fontWeight: 700,
+    color: "text.secondary",
+    whiteSpace: "nowrap",
   };
+  const itemTableCellSx = { py: 1, px: 1, verticalAlign: "top" };
 
   useEffect(() => {
-    if (state) {
-      if (typeof state.customer === "object") {
-        setCustomer(state.customer);
-      } else {
-        setCustomer((prev) => ({ ...prev, name: state.customer || "" }));
-      }
-      setItems(state.items || []);
-      setTax(state.tax || "");
-      setDiscount(state.discount || "");
-      setPayment(state.payment || { method: "CASH", amount: "" });
-      setIsPaid(state.status === "Paid");
+    const fetchProducts = async () => {
+      const res = await getProducts();
+      setProducts(Array.isArray(res.data) ? res.data : []);
+    };
+    fetchProducts();
+  }, []);
+
+  useEffect(() => {
+    if (!state) return;
+
+    if (typeof state.customer === "object") {
+      setCustomer({ ...emptyCustomer, ...state.customer });
+    } else {
+      setCustomer((prev) => ({ ...prev, name: state.customer || "" }));
     }
+
+    const incomingItems = Array.isArray(state.items) ? state.items : [];
+    setItems(incomingItems);
+    setItemLocks(incomingItems.map(() => false));
+
+    setTax(state.tax || "");
+    setDiscount(state.discount || "");
+    setPayment(state.payment || { method: "CASH", amount: "" });
+    setIsPaid(state.status === "Paid");
   }, [state]);
 
-  const generateInvoiceNo = () => "INV" + Date.now();
+  const generateInvoiceNo = () => (isQuotation ? "QTN" : "INV") + Date.now();
 
   const addItem = () => {
-    setItems([...items, {
-      productId: "",
-      code: "",
-      name: "",
-      quantity: "",
-      size: "",
-      uom: "",
-      price: 0,
-      total: 0,
-    }]);
+    setItems((prev) => [
+      ...prev,
+      {
+        productId: "",
+        code: "",
+        name: "",
+        quantity: "",
+        size: "",
+        uom: "",
+        price: 0,
+        total: 0,
+      },
+    ]);
+    setItemLocks((prev) => [...prev, false]);
   };
 
   const handleItemChange = (index, field, value) => {
@@ -86,20 +112,21 @@ const Invoice = () => {
 
     if (field === "productId") {
       const selected = products.find((p) => p._id === value);
-      updated[index].price = selected?.price || 0;
+      updated[index].price =
+        selected?.totalPrice ??
+        (Number(selected?.price || 0) * (1 + Number(selected?.gst || 0) / 100));
       updated[index].name = selected?.name || "";
       updated[index].code = selected?.code || "";
       updated[index].size = selected?.size || "";
       updated[index].uom = selected?.uom || "";
-      updated[index].availableStock = selected?.stock ?? null; // ✅ store available stock
+      updated[index].availableStock = selected?.stock ?? null;
     }
 
     if (field === "name") {
       updated[index].name = value;
     }
 
-    // ✅ Stock validation when quantity changes
-    if (field === "quantity") {
+    if (field === "quantity" && !isQuotation) {
       const qty = Number(value) || 0;
       const availableStock = updated[index].availableStock;
 
@@ -111,14 +138,14 @@ const Invoice = () => {
           setItems(updated);
           return;
         }
+
         if (qty > availableStock) {
           toast.error(
             `Only ${availableStock} ${updated[index].uom || "units"} available for "${updated[index].name}"`,
-            { id: `stock-${index}` }  // prevent duplicate toasts
+            { id: `stock-${index}` }
           );
-          updated[index].quantity = availableStock; // cap at max available
-          updated[index].total =
-            Number(updated[index].price) * availableStock;
+          updated[index].quantity = availableStock;
+          updated[index].total = Number(updated[index].price) * availableStock;
           setItems(updated);
           return;
         }
@@ -133,7 +160,17 @@ const Invoice = () => {
   };
 
   const removeItem = (index) => {
-    setItems(items.filter((_, i) => i !== index));
+    setItems((prev) => prev.filter((_, i) => i !== index));
+    setItemLocks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const confirmItem = (index) => {
+    setItemLocks((prev) => prev.map((locked, i) => (i === index ? true : locked)));
+    if (activeIndex === index) setActiveIndex(null);
+  };
+
+  const editItem = (index) => {
+    setItemLocks((prev) => prev.map((locked, i) => (i === index ? false : locked)));
   };
 
   const total = items.reduce((acc, i) => acc + (Number(i.total) || 0), 0);
@@ -149,19 +186,28 @@ const Invoice = () => {
     setCustomer({ ...customer, [e.target.name]: e.target.value });
   };
 
+  const canConfirmCustomer =
+    customer.name.trim() && customer.phone.trim() && customer.address.trim();
+
+  const handleConfirmCustomer = () => {
+    if (!canConfirmCustomer) {
+      toast.error("Please fill Customer Name, Phone Number, and Address before confirming");
+      return;
+    }
+    setCustomerLocked(true);
+  };
+
   const handleSubmit = async () => {
     if (!customer.name) {
       toast.error("Customer name is required");
       return;
     }
 
-    // ✅ Must have at least one item
     if (items.length === 0) {
       toast.error("Add at least one item to generate a bill");
       return;
     }
 
-    // ✅ Each item must have a name and valid quantity
     const invalidItem = items.find((i) => !i.name || !i.quantity || Number(i.quantity) <= 0);
     if (invalidItem) {
       toast.error("Each item must have a product and valid quantity");
@@ -169,17 +215,29 @@ const Invoice = () => {
     }
 
     const data = {
-      customer, items, tax, discount, taxAmount, discountAmount,
-      payment, status: "Pending",
+      customer,
+      items,
+      tax,
+      discount,
+      taxAmount,
+      discountAmount,
+      payment,
+      status: "Pending",
       invoiceNo: generateInvoiceNo(),
       date: new Date().toLocaleString(),
     };
+
     try {
-      const res = await API.post("/invoices", data);
-      setInvoiceData(res.data);
-      toast.success("Invoice Created ✅");
+      if (isQuotation) {
+        setInvoiceData(data);
+        toast.success("Quotation Created");
+      } else {
+        const res = await API.post("/invoices", data);
+        setInvoiceData(res.data);
+        toast.success("Invoice Created");
+      }
     } catch {
-      toast.error("Error ❌");
+      toast.error("Error");
     }
   };
 
@@ -187,9 +245,9 @@ const Invoice = () => {
     try {
       await API.put(`/invoices/${invoiceData._id}`, { status: paid ? "Paid" : "Pending" });
       setIsPaid(paid);
-      toast.success("Status Updated ✅");
+      toast.success("Status Updated");
     } catch {
-      toast.error("Update failed ❌");
+      toast.error("Update failed");
     }
   };
 
@@ -201,258 +259,388 @@ const Invoice = () => {
     const imgWidth = 210;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-    pdf.save(`Invoice-${invoiceData.invoiceNo}.pdf`);
+    pdf.save(`${isQuotation ? "Quotation" : "Invoice"}-${invoiceData.invoiceNo}.pdf`);
   };
 
-  const handlePrint = () => { window.print(); };
+  const handlePrint = () => {
+    window.print();
+  };
 
   const handleDone = () => {
-    setCustomer({ name: "", phone: "", address: "", district: "", state: "", pincode: "" });
+    setCustomer(emptyCustomer);
     setItems([]);
+    setItemLocks([]);
     setTax("");
     setDiscount("");
     setPayment({ method: "CASH", amount: "" });
     setInvoiceData(null);
     setIsPaid(false);
-    navigate("/CustomerList");
+    setCustomerLocked(false);
+    toast.success("Done");
+    navigate(isQuotation ? "/quotation" : "/CustomerList");
   };
 
   return (
     <Card sx={{ p: 3 }}>
-      <Typography variant="h6" fontWeight="bold" mb={2}>Create Invoice</Typography>
-
-      {/* CUSTOMER DETAILS */}
-      <Typography variant="subtitle1" fontWeight="bold" mb={1} color="text.secondary">
-        Customer Details
+      <Typography variant="h6" fontWeight="bold" mb={2}>
+        {isQuotation ? "Create Quotation" : "Create Invoice"}
       </Typography>
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={6}>
-          <TextField label="Customer Name *" name="name" fullWidth value={customer.name} onChange={handleCustomerChange} />
+
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+        <Typography variant="subtitle1" fontWeight="bold" color="text.secondary">
+          Customer Details
+        </Typography>
+      </Box>
+
+      <Card
+        variant="outlined"
+        sx={{
+          p: 2,
+          borderRadius: 2,
+          borderColor: "#bfdbfe",
+          background: "linear-gradient(180deg, #f8fbff 0%, #eef6ff 100%)",
+        }}
+      >
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={4}>
+            <TextField
+              label="Customer Name *"
+              name="name"
+              fullWidth
+              required
+              value={customer.name}
+              onChange={handleCustomerChange}
+              disabled={isQuotation && customerLocked}
+              sx={{ "& .MuiOutlinedInput-root": { background: "#ffffff" } }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <TextField
+              label="Phone Number *"
+              name="phone"
+              fullWidth
+              required
+              inputProps={{ maxLength: 10 }}
+              value={customer.phone}
+              onChange={handleCustomerChange}
+              disabled={isQuotation && customerLocked}
+              sx={{ "& .MuiOutlinedInput-root": { background: "#ffffff" } }}
+            />
+          </Grid>
+          <Grid item xs={12} md={4}>
+            <Box display="flex" alignItems="center" gap={1}>
+              <TextField
+                label="Address *"
+                name="address"
+                fullWidth
+                required
+                value={customer.address}
+                onChange={handleCustomerChange}
+                disabled={isQuotation && customerLocked}
+                sx={{ "& .MuiOutlinedInput-root": { background: "#ffffff" } }}
+              />
+              {isQuotation && !customerLocked && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckCircleOutlineIcon />}
+                  onClick={handleConfirmCustomer}
+                  disabled={!canConfirmCustomer}
+                  sx={{ height: 40, minWidth: 116, whiteSpace: "nowrap" }}
+                >
+                  Confirm
+                </Button>
+              )}
+            </Box>
+          </Grid>
         </Grid>
-        <Grid item xs={12} sm={6}>
-          <TextField label="Phone Number" name="phone" fullWidth inputProps={{ maxLength: 10 }} value={customer.phone} onChange={handleCustomerChange} />
-        </Grid>
-        <Grid item xs={12}>
-          <TextField label="Address" name="address" fullWidth multiline rows={2} value={customer.address} onChange={handleCustomerChange} />
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <TextField label="District" name="district" fullWidth value={customer.district} onChange={handleCustomerChange} />
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <TextField label="State" name="state" fullWidth value={customer.state} onChange={handleCustomerChange} />
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <TextField label="Pincode" name="pincode" fullWidth inputProps={{ maxLength: 6 }} value={customer.pincode} onChange={handleCustomerChange} />
-        </Grid>
-      </Grid>
+      </Card>
+
+      {isQuotation && customerLocked && (
+        <Card
+          variant="outlined"
+          sx={{
+            mt: 2,
+            p: 2,
+            borderRadius: 2,
+            borderColor: "#86efac",
+            background: "linear-gradient(90deg, #f0fdf4 0%, #ecfeff 100%)",
+          }}
+        >
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+            <Typography variant="subtitle2" fontWeight={700} color="success.dark">
+              Customer Confirmed
+            </Typography>
+            <Button
+              size="small"
+              variant="outlined"
+              color="primary"
+              startIcon={<EditIcon />}
+              onClick={() => setCustomerLocked(false)}
+            >
+              Edit
+            </Button>
+          </Box>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={4}>
+              <Typography variant="caption" color="text.secondary">Name</Typography>
+              <Typography fontWeight={600}>{customer.name || "-"}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Typography variant="caption" color="text.secondary">Phone</Typography>
+              <Typography fontWeight={600}>{customer.phone || "-"}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Typography variant="caption" color="text.secondary">Address</Typography>
+              <Typography fontWeight={600}>{customer.address || "-"}</Typography>
+            </Grid>
+          </Grid>
+        </Card>
+      )}
 
       <Divider sx={{ my: 3 }} />
 
-      {/* ITEMS */}
       <Typography variant="subtitle1" fontWeight="bold" mb={1} color="text.secondary">
         Items
       </Typography>
 
       <Button variant="contained" onClick={addItem}>+ Add Item</Button>
 
-      {/* Column Labels */}
       {items.length > 0 && (
-        <Box sx={{ display: "flex", gap: 1.5, mt: 2, px: 0.5 }}>
-          <Typography sx={{ minWidth: 190, fontSize: 12, color: "text.secondary" }}>Product</Typography>
-          <Typography sx={{ width: 90, fontSize: 12, color: "text.secondary" }}>Code</Typography>
-          <Typography sx={{ width: 70, fontSize: 12, color: "text.secondary" }}>Qty</Typography>
-          <Typography sx={{ width: 90, fontSize: 12, color: "text.secondary" }}>Size</Typography>
-          <Typography sx={{ width: 90, fontSize: 12, color: "text.secondary" }}>UOM</Typography>
-          <Typography sx={{ width: 95, fontSize: 12, color: "text.secondary" }}>Price/Unit</Typography>
-          <Typography sx={{ width: 105, fontSize: 12, color: "text.secondary" }}>Total</Typography>
-        </Box>
-      )}
+        <TableContainer component={Paper} variant="outlined" sx={{ mt: 2, overflow: "visible" }}>
+          <Table size="small" sx={{ minWidth: 980 }}>
+            <TableHead sx={{ background: "#f8fafc" }}>
+              <TableRow>
+                <TableCell sx={itemHeadCellSx}>Product</TableCell>
+                <TableCell sx={itemHeadCellSx}>Code</TableCell>
+                <TableCell sx={itemHeadCellSx}>Qty</TableCell>
+                <TableCell sx={itemHeadCellSx}>Size</TableCell>
+                <TableCell sx={itemHeadCellSx}>UOM</TableCell>
+                <TableCell sx={itemHeadCellSx}>Price/Unit</TableCell>
+                <TableCell sx={itemHeadCellSx}>Total</TableCell>
+                <TableCell sx={itemHeadCellSx}>Action</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((item, index) => {
+                const filteredProducts = products
+                  .filter((p) => p.name.toLowerCase().includes((item.name || "").toLowerCase()))
+                  .slice(0, 5);
 
-      {items.map((item, index) => (
-        <Box key={index} sx={{ display: "flex", gap: 1.5, mt: 1, flexWrap: "wrap", alignItems: "center" }}>
+                return (
+                  <TableRow key={index}>
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 320, position: "relative" }}>
+                      <TextField
+                        size="small"
+                        placeholder="Search product..."
+                        value={item.name}
+                        disabled={isQuotation && itemLocks[index]}
+                        onFocus={() => setActiveIndex(index)}
+                        onChange={(e) => {
+                          handleItemChange(index, "name", e.target.value);
+                          setActiveIndex(index);
+                        }}
+                        fullWidth
+                      />
 
-          {/* Product Search */}
-          <Box sx={{ position: "relative", minWidth: 190 }}>
-            <TextField
-              size="small"
-              placeholder="Search product..."
-              value={item.name}
-              onChange={(e) => {
-                handleItemChange(index, "name", e.target.value);
-                setActiveIndex(index);
-              }}
-              fullWidth
-            />
-            {activeIndex === index && item.name && (
-              <Box sx={{
-                position: "absolute", top: "100%", left: 0, right: 0,
-                background: "#fff", border: "1px solid #ccc", borderRadius: 1,
-                zIndex: 10, maxHeight: 160, overflowY: "auto", boxShadow: 2,
-              }}>
-                {products
-                  .filter((p) => p.name.toLowerCase().includes(item.name.toLowerCase()))
-                  .slice(0, 5)
-                  .map((p) => (
-                    <Box
-                      key={p._id}
-                      sx={{
-                        padding: "8px", cursor: p.stock <= 0 ? "not-allowed" : "pointer",
-                        fontSize: 13,
-                        background: p.stock <= 0 ? "#fef2f2" : "#fff",
-                        "&:hover": { background: p.stock <= 0 ? "#fef2f2" : "#f1f5f9" },
-                      }}
-                      onClick={() => {
-                        if (p.stock <= 0) {
-                          toast.error(`"${p.name}" is out of stock!`);
-                          return;
-                        }
-                        handleItemChange(index, "productId", p._id);
-                        setActiveIndex(null);
-                      }}
-                    >
-                      <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Box>
-                          <strong>{p.name}</strong>
-                          {p.code && <span style={{ color: "#15803d", marginLeft: 6, fontSize: 12 }}>[{p.code.toUpperCase()}]</span>}
-                          {p.size && <span style={{ color: "#555", marginLeft: 6, fontSize: 12 }}>{p.size}</span>}
-                          <span style={{ color: "#888", marginLeft: 6, fontSize: 12 }}>₹{p.price}</span>
+                      {activeIndex === index && !(isQuotation && itemLocks[index]) && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            top: "calc(100% - 6px)",
+                            left: 8,
+                            right: 8,
+                            background: "#fff",
+                            border: "1px solid #ccc",
+                            borderRadius: 1,
+                            zIndex: 30,
+                            minHeight: filteredProducts.length === 0 ? 250 : "auto",
+                            overflowY: "hidden",
+                            boxShadow: 2,
+                          }}
+                        >
+                          {filteredProducts.map((p) => (
+                            <Box
+                              key={p._id}
+                              sx={{
+                                padding: "8px",
+                                cursor: p.stock <= 0 && !isQuotation ? "not-allowed" : "pointer",
+                                fontSize: 13,
+                                background: p.stock <= 0 && !isQuotation ? "#fef2f2" : "#fff",
+                                "&:hover": { background: p.stock <= 0 && !isQuotation ? "#fef2f2" : "#f1f5f9" },
+                              }}
+                              onClick={() => {
+                                if (p.stock <= 0 && !isQuotation) {
+                                  toast.error(`"${p.name}" is out of stock!`);
+                                  return;
+                                }
+                                handleItemChange(index, "productId", p._id);
+                                setActiveIndex(null);
+                              }}
+                            >
+                              <Box display="flex" justifyContent="space-between" alignItems="center">
+                                <Box>
+                                  <strong>{p.name}</strong>
+                                  {p.code && <span style={{ color: "#15803d", marginLeft: 6, fontSize: 12 }}>[{p.code.toUpperCase()}]</span>}
+                                  {p.size && <span style={{ color: "#555", marginLeft: 6, fontSize: 12 }}>{p.size}</span>}
+                                  <span style={{ color: "#888", marginLeft: 6, fontSize: 12 }}>
+                                    Rs.{(p.totalPrice ?? (Number(p.price || 0) * (1 + Number(p.gst || 0) / 100))).toFixed(2)}
+                                  </span>
+                                </Box>
+                                <span
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    padding: "2px 7px",
+                                    borderRadius: 6,
+                                    background: p.stock <= 0 ? "#fee2e2" : p.stock < 10 ? "#fef3c7" : "#dcfce7",
+                                    color: p.stock <= 0 ? "#b91c1c" : p.stock < 10 ? "#92400e" : "#166534",
+                                    marginLeft: 8,
+                                  }}
+                                >
+                                  {p.stock <= 0 ? "Out of stock" : `Stock: ${p.stock}`}
+                                </span>
+                              </Box>
+                            </Box>
+                          ))}
+                          {filteredProducts.length === 0 && (
+                            <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary", fontSize: 13 }}>
+                              No products found
+                            </Box>
+                          )}
                         </Box>
-                        <span style={{
-                          fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 6,
-                          background: p.stock <= 0 ? "#fee2e2" : p.stock < 10 ? "#fef3c7" : "#dcfce7",
-                          color: p.stock <= 0 ? "#b91c1c" : p.stock < 10 ? "#92400e" : "#166534",
-                          marginLeft: 8,
-                        }}>
-                          {p.stock <= 0 ? "Out of stock" : `Stock: ${p.stock}`}
-                        </span>
-                      </Box>
-                    </Box>
-                  ))}
-              </Box>
-            )}
-          </Box>
+                      )}
+                    </TableCell>
 
-          {/* Code (readonly — auto filled) */}
-          <TextField
-            size="small"
-            placeholder="Code"
-            sx={{ width: 90 }}
-            value={item.code ? item.code.toUpperCase() : ""}
-            disabled
-          />
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 110 }}>
+                      <TextField size="small" placeholder="Code" fullWidth value={item.code ? item.code.toUpperCase() : ""} disabled />
+                    </TableCell>
 
-          {/* Qty */}
-          <Box sx={{ position: "relative" }}>
-            <TextField
-              size="small"
-              placeholder="Qty"
-              type="number"
-              sx={{ width: 75 }}
-              value={item.quantity}
-              disabled={item.availableStock !== undefined && item.availableStock !== null && item.availableStock <= 0}
-              inputProps={{
-                min: 0,
-                max: item.availableStock ?? undefined,
-              }}
-              onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
-              helperText={
-                item.availableStock !== null && item.availableStock !== undefined
-                  ? item.availableStock <= 0
-                    ? "Out of stock"
-                    : `Max: ${item.availableStock}`
-                  : ""
-              }
-              FormHelperTextProps={{
-                sx: {
-                  fontSize: 10,
-                  color: item.availableStock <= 0 ? "error.main" : "text.secondary",
-                  mx: 0,
-                },
-              }}
-            />
-          </Box>
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 90 }}>
+                      <TextField
+                        size="small"
+                        placeholder="Qty"
+                        type="number"
+                        fullWidth
+                        value={item.quantity}
+                        disabled={(isQuotation && itemLocks[index]) || (!isQuotation && item.availableStock !== undefined && item.availableStock !== null && item.availableStock <= 0)}
+                        inputProps={{
+                          min: 0,
+                          max: isQuotation ? undefined : item.availableStock ?? undefined,
+                        }}
+                        onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
+                        helperText={
+                          !isQuotation && item.availableStock !== null && item.availableStock !== undefined
+                            ? item.availableStock <= 0
+                              ? "Out of stock"
+                              : `Max: ${item.availableStock}`
+                            : ""
+                        }
+                        FormHelperTextProps={{
+                          sx: {
+                            fontSize: 10,
+                            color: item.availableStock <= 0 ? "error.main" : "text.secondary",
+                            mx: 0,
+                          },
+                        }}
+                      />
+                    </TableCell>
 
-          {/* Size (editable) */}
-          <TextField
-            size="small" placeholder="e.g. 2X2" sx={{ width: 90 }}
-            value={item.size}
-            onChange={(e) => handleItemChange(index, "size", e.target.value)}
-          />
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 110 }}>
+                      <TextField
+                        size="small"
+                        placeholder="e.g. 2X2"
+                        fullWidth
+                        value={item.size}
+                        disabled={isQuotation && itemLocks[index]}
+                        onChange={(e) => handleItemChange(index, "size", e.target.value)}
+                      />
+                    </TableCell>
 
-          {/* UOM (editable) */}
-          <TextField
-            size="small" placeholder="UOM" sx={{ width: 90 }}
-            value={item.uom}
-            onChange={(e) => handleItemChange(index, "uom", e.target.value)}
-          />
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 110 }}>
+                      <TextField
+                        size="small"
+                        placeholder="UOM"
+                        fullWidth
+                        value={item.uom}
+                        disabled={isQuotation && itemLocks[index]}
+                        onChange={(e) => handleItemChange(index, "uom", e.target.value)}
+                      />
+                    </TableCell>
 
-          {/* Price (readonly) */}
-          <TextField size="small" value={`₹${item.price}`} sx={{ width: 95 }} disabled />
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 130 }}>
+                      <TextField size="small" value={`Rs.${item.price}`} fullWidth disabled />
+                    </TableCell>
 
-          {/* Total (readonly) */}
-          <TextField size="small" value={`₹${Number(item.total).toFixed(2)}`} sx={{ width: 105 }} disabled />
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 130 }}>
+                      <TextField size="small" value={`Rs.${Number(item.total).toFixed(2)}`} fullWidth disabled />
+                    </TableCell>
 
-          <IconButton color="error" onClick={() => removeItem(index)}>
-            <DeleteIcon />
-          </IconButton>
-        </Box>
-      ))}
+                    <TableCell sx={{ ...itemTableCellSx, minWidth: 140 }}>
+                      {isQuotation ? (
+                        <Box display="flex" gap={0.5}>
+                          <IconButton color="success" size="small" onClick={() => confirmItem(index)} title="Confirm">
+                            <CheckCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton color="primary" size="small" onClick={() => editItem(index)} title="Edit">
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton color="error" size="small" onClick={() => removeItem(index)} title="Delete">
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      ) : (
+                        <IconButton color="error" size="small" onClick={() => removeItem(index)}>
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      )}
 
       <Divider sx={{ my: 3 }} />
 
-      {/* TAX & DISCOUNT */}
       <Box sx={{ display: "flex", gap: 2 }}>
         <TextField label="Tax %" type="number" value={tax} onChange={(e) => setTax(e.target.value)} />
         <TextField label="Discount %" type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
       </Box>
 
       <Typography sx={{ mt: 2, fontWeight: "bold", fontSize: 18 }}>
-        Final: ₹{finalAmount.toFixed(2)}
+        Final: Rs.{finalAmount.toFixed(2)}
       </Typography>
 
-      <Button
-        sx={{ mt: 2 }}
-        variant="contained"
-        onClick={handleSubmit}
-        disabled={items.length === 0}
-      >
-        Generate Invoice
+      <Button sx={{ mt: 2 }} variant="contained" onClick={handleSubmit} disabled={items.length === 0}>
+        {isQuotation ? "Generate Quotation" : "Generate Invoice"}
       </Button>
 
-      {/* INVOICE PREVIEW */}
       {invoiceData && (
         <Box mt={5}>
           <Box id="invoice-preview">
             <InvoicePrint data={invoiceData} />
           </Box>
 
-          <Box mt={3} display="flex" gap={2}>
-            <Button variant={isPaid ? "contained" : "outlined"} color="success" onClick={() => updateStatus(true)}>
-              Payment Received
-            </Button>
-            <Button variant={!isPaid ? "contained" : "outlined"} color="warning" onClick={() => updateStatus(false)}>
-              Pending
-            </Button>
-          </Box>
-
-          <Box mt={3} display="flex" justifyContent="space-between">
-            <TextField
-              select label="Method" size="small" value={payment.method}
-              onChange={(e) => setPayment({ ...payment, method: e.target.value })}
-            >
-              <MenuItem value="CASH">Cash</MenuItem>
-              <MenuItem value="UPI">UPI</MenuItem>
-              <MenuItem value="CARD">Card</MenuItem>
-            </TextField>
-            <Box display="flex" gap={2}>
-              <Button onClick={handleDownload}>Download PDF</Button>
-              <Button onClick={handlePrint}>Print</Button>
+          {!isQuotation && (
+            <Box mt={3} display="flex" gap={2}>
+              <Button variant={isPaid ? "contained" : "outlined"} color="success" onClick={() => updateStatus(true)}>
+                Payment Received
+              </Button>
+              <Button variant={!isPaid ? "contained" : "outlined"} color="warning" onClick={() => updateStatus(false)}>
+                Pending
+              </Button>
             </Box>
-          </Box>
+          )}
 
-          <Button fullWidth sx={{ mt: 3 }} variant="contained" color="success" onClick={handleDone}>
-            Done
-          </Button>
+          <Box mt={3} display="flex" gap={2} justifyContent="flex-end">
+            <Button onClick={handlePrint}>Print</Button>
+            <Button onClick={handleDownload}>Download PDF</Button>
+            <Button variant="contained" color="success" onClick={handleDone}>Done</Button>
+          </Box>
         </Box>
       )}
     </Card>

@@ -3,7 +3,20 @@ const Customer = require("../models/Customer");
 // ✅ CREATE or UPDATE CUSTOMER (called from invoice flow)
 exports.createOrUpdateCustomer = async (req, res) => {
   try {
-    const { name, phone, address, district, state, pincode, amount, status, method } = req.body;
+    const {
+      name,
+      phone,
+      address,
+      accountNo,
+      ifscCode,
+      upiId,
+      accountHolder,
+      bankName,
+      branch,
+      amount,
+      status,
+      method,
+    } = req.body;
 
     if (!name) return res.status(400).json({ error: "Customer name is required" });
 
@@ -13,14 +26,19 @@ exports.createOrUpdateCustomer = async (req, res) => {
       // Update details in case they changed
       customer.phone = phone || customer.phone;
       customer.address = address || customer.address;
-      customer.district = district || customer.district;
-      customer.state = state || customer.state;
-      customer.pincode = pincode || customer.pincode;
+      customer.accountNo = accountNo || customer.accountNo;
+      customer.ifscCode = ifscCode || customer.ifscCode;
+      customer.upiId = upiId || customer.upiId;
+      customer.accountHolder = accountHolder || customer.accountHolder;
+      customer.bankName = bankName || customer.bankName;
+      customer.branch = branch || customer.branch;
 
-      customer.totalSpent += amount || 0;
-      customer.lastPurchase = new Date();
-      customer.status = status;
-      customer.method = method;
+      if (Number(amount) > 0) {
+        customer.totalSpent += Number(amount);
+        customer.lastPurchase = new Date();
+      }
+      customer.status = status || customer.status;
+      customer.method = method !== undefined ? method : customer.method;
 
       await customer.save();
     } else {
@@ -28,13 +46,16 @@ exports.createOrUpdateCustomer = async (req, res) => {
         name,
         phone: phone || "",
         address: address || "",
-        district: district || "",
-        state: state || "",
-        pincode: pincode || "",
-        totalSpent: amount || 0,
+        accountNo: accountNo || "",
+        ifscCode: ifscCode || "",
+        upiId: upiId || "",
+        accountHolder: accountHolder || "",
+        bankName: bankName || "",
+        branch: branch || "",
+        totalSpent: Number(amount) || 0,
         lastPurchase: new Date(),
-        status,
-        method,
+        status: status || "Pending",
+        method: method || "",
       });
     }
 

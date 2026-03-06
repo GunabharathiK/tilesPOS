@@ -6,16 +6,19 @@ const customerSchema = new mongoose.Schema(
     name: { type: String, default: "" },
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
-    district: { type: String, default: "" },
-    state: { type: String, default: "" },
-    pincode: { type: String, default: "" },
+    accountNo: { type: String, default: "" },
+    ifscCode: { type: String, default: "" },
+    upiId: { type: String, default: "" },
+    accountHolder: { type: String, default: "" },
+    bankName: { type: String, default: "" },
+    branch: { type: String, default: "" },
 
     totalSpent: { type: Number, default: 0 },
     lastPurchase: Date,
 
     status: {
       type: String,
-      enum: ["Paid", "Pending"],
+      enum: ["Paid", "Pending", "Partial"],
       default: "Pending",
     },
 

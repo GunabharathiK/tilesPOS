@@ -74,14 +74,6 @@ const CustomerList = () => {
     return customer.phone || "-";
   };
 
-  // ✅ Helper: get customer location
-  const getCustomerLocation = (customer) => {
-    if (!customer || typeof customer !== "object") return "-";
-    return (
-      [customer.district, customer.state].filter(Boolean).join(", ") || "-"
-    );
-  };
-
   // Search filter — works on name and phone too
   const filteredInvoices = invoices.filter((inv) => {
     const name = getCustomerName(inv.customer).toLowerCase();
@@ -154,7 +146,7 @@ const CustomerList = () => {
               <TableCell>Invoice No</TableCell>
               <TableCell>Customer</TableCell>
               <TableCell>Phone</TableCell>
-              <TableCell>Location</TableCell>
+              <TableCell>Address</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Total</TableCell>
               <TableCell>Status</TableCell>
@@ -172,7 +164,7 @@ const CustomerList = () => {
                   <TableCell>{inv.invoiceNo}</TableCell>
                   <TableCell>{getCustomerName(inv.customer)}</TableCell>
                   <TableCell>{getCustomerPhone(inv.customer)}</TableCell>
-                  <TableCell>{getCustomerLocation(inv.customer)}</TableCell>
+                  <TableCell>{typeof inv.customer === "object" ? inv.customer?.address || "-" : "-"}</TableCell>
                   <TableCell>{inv.date}</TableCell>
                   <TableCell>₹{inv.payment?.amount}</TableCell>
 
