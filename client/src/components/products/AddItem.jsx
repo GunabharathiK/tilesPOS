@@ -25,9 +25,27 @@ const T = {
   white:       "#ffffff",
 };
 
-const CATEGORY_OPTIONS = ["Floor Tile", "Wall Tile", "Vitrified Tile", "Parking Tile", "Granite", "Marble"];
-const BRAND_OPTIONS    = ["Kajaria", "Somany", "Nitco", "Johnson", "Orientbell", "Other"];
-const FINISH_OPTIONS   = ["Matt", "Glossy", "Polished", "Satin", "Rustic"];
+// ── Built-in fallbacks ─────────────────────────────────────────────────────
+const DEFAULT_CATEGORIES = ["Floor Tile", "Wall Tile", "Vitrified Tile", "Parking Tile", "Granite", "Marble"];
+const DEFAULT_BRANDS      = ["Kajaria", "Somany", "Nitco", "Johnson", "Orientbell", "Other"];
+const DEFAULT_FINISHES    = ["Matt", "Glossy", "Polished", "Satin", "Rustic"];
+const DEFAULT_RACKS       = ["Rack-A1", "Rack-A2", "Rack-B1", "Rack-B2", "Rack-C1"];
+
+// Read from productDefaults (saved by Settings.jsx), fall back to built-ins
+const getProductDefaults = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("productDefaults")) || {};
+    return {
+      categories: saved.categories?.length ? saved.categories : DEFAULT_CATEGORIES,
+      brands:     saved.brands?.length     ? saved.brands     : DEFAULT_BRANDS,
+      finishes:   saved.finishes?.length   ? saved.finishes   : DEFAULT_FINISHES,
+      racks:      saved.racks?.length      ? saved.racks      : DEFAULT_RACKS,
+    };
+  } catch {
+    return { categories: DEFAULT_CATEGORIES, brands: DEFAULT_BRANDS, finishes: DEFAULT_FINISHES, racks: DEFAULT_RACKS };
+  }
+};
+
 const GST_OPTIONS = [
   { label: "0% (Exempt)",     value: 0  },
   { label: "5%",              value: 5  },
@@ -139,18 +157,22 @@ const productToForm = (p) => ({
   uom:              p.uom              || "sqrft",
 });
 
-const AddItem = ({ embedded = false }) => {
+const AddItem = ({ embedded = false, onSaved }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  /* editProduct comes from router state when clicking Edit on a card */
   const editProduct = location.state?.editProduct || null;
   const isEdit      = Boolean(editProduct);
 
-  const [form,       setForm]       = useState(isEdit ? productToForm(editProduct) : empty());
-  const [preview,    setPreview]    = useState(isEdit ? (editProduct.image || editProduct.productImage || "") : "");
-  const [loading,    setLoading]    = useState(false);
-  const [categories, setCategories] = useState(CATEGORY_OPTIONS);
+  const [form,    setForm]    = useState(isEdit ? productToForm(editProduct) : empty());
+  const [preview, setPreview] = useState(isEdit ? (editProduct.image || editProduct.productImage || "") : "");
+  const [loading, setLoading] = useState(false);
+
+  // Dropdown options — loaded from productDefaults (Settings) + API for categories
+  const [categories, setCategories] = useState(() => getProductDefaults().categories);
+  const [brands,     setBrands]     = useState(() => getProductDefaults().brands);
+  const [finishes,   setFinishes]   = useState(() => getProductDefaults().finishes);
+  const [racks,      setRacks]      = useState(() => getProductDefaults().racks);
 
   /* Re-hydrate if navigated to edit a different product */
   useEffect(() => {
@@ -164,13 +186,22 @@ const AddItem = ({ embedded = false }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editProduct?._id]);
 
+  // Sync productDefaults from localStorage whenever component mounts
+  useEffect(() => {
+    const d = getProductDefaults();
+    setBrands(d.brands);
+    setFinishes(d.finishes);
+    setRacks(d.racks);
+  }, []);
+
+  // Load categories from API (overwrites local if API has data)
   useEffect(() => {
     API.get("/categories")
       .then((res) => {
         const dynamic = (res.data || []).map((c) => c.name).filter(Boolean);
-        setCategories(dynamic.length ? dynamic : CATEGORY_OPTIONS);
+        if (dynamic.length) setCategories(dynamic);
       })
-      .catch(() => setCategories(CATEGORY_OPTIONS));
+      .catch(() => {/* use localStorage defaults */});
   }, []);
 
   const handleChange = (e) => {
@@ -230,7 +261,6 @@ const AddItem = ({ embedded = false }) => {
   const handleReset = () => {
     setForm(empty());
     setPreview("");
-    /* If we were editing, go back to product list */
     if (isEdit) navigate(-1);
   };
 
@@ -275,10 +305,12 @@ const AddItem = ({ embedded = false }) => {
       if (isEdit) {
         await updateProduct(editProduct._id, payload);
         toast.success("Product updated ✅");
+        if (typeof onSaved === "function") await onSaved();
         navigate(-1);
       } else {
         await createProduct(payload);
         toast.success("Product saved ✅");
+        if (typeof onSaved === "function") await onSaved();
         handleReset();
       }
     } catch (err) {
@@ -346,13 +378,13 @@ const AddItem = ({ embedded = false }) => {
           <Box sx={{ gridColumn: "span 3" }}>
             <FormField label="Brand" name="brand" value={form.brand} onChange={handleChange} required select>
               <MenuItem value="">Select brand</MenuItem>
-              {BRAND_OPTIONS.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              {brands.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
             </FormField>
           </Box>
           <Box sx={{ gridColumn: "span 3" }}>
             <FormField label="Finish" name="finish" value={form.finish} onChange={handleChange} required select>
               <MenuItem value="">Select finish</MenuItem>
-              {FINISH_OPTIONS.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              {finishes.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
             </FormField>
           </Box>
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Color / Shade" name="colorDesign" value={form.colorDesign} onChange={handleChange} placeholder="Beige, Grey, White..." /></Box>
@@ -370,7 +402,6 @@ const AddItem = ({ embedded = false }) => {
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Retail Price (Rs/sqft)" name="price" value={form.price} onChange={handleChange} required type="number" placeholder="85.00" /></Box>
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Dealer / Bulk Price" name="dealerPrice" value={form.dealerPrice} onChange={handleChange} required type="number" placeholder="72.00" /></Box>
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Minimum Sell Price" name="minimumSellPrice" value={form.minimumSellPrice} onChange={handleChange} type="number" placeholder="78.00" /></Box>
-
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Contractor Price" name="contractorPrice" value={form.contractorPrice} onChange={handleChange} type="number" placeholder="78.00" /></Box>
           <Box sx={{ gridColumn: "span 3" }}>
             <FormField label="GST Rate" name="gst" value={form.gst} onChange={handleChange} required select>
@@ -388,7 +419,15 @@ const AddItem = ({ embedded = false }) => {
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Opening Stock (sqft)" name="stock" value={form.stock} onChange={handleChange} required type="number" placeholder="0" InputProps={{ readOnly: true }} /></Box>
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Opening Stock (boxes)" name="stockBoxes" value={form.stockBoxes} onChange={handleChange} required type="number" placeholder="0" /></Box>
           <Box sx={{ gridColumn: "span 3" }}><FormField label="Minimum Stock" name="reorderLevel" value={form.reorderLevel} onChange={handleChange} required type="number" placeholder="100" /></Box>
-          <Box sx={{ gridColumn: "span 3" }}><FormField label="Rack Location" name="rackLocation" value={form.rackLocation} onChange={handleChange} placeholder="Rack-A3" /></Box>
+          <Box sx={{ gridColumn: "span 3" }}>
+            {/* Rack location as select if racks defined, else free text */}
+            <FormField label="Rack Location" name="rackLocation" value={form.rackLocation} onChange={handleChange} select={racks.length > 0}>
+              {racks.length > 0 && [
+                <MenuItem key="" value="">Select rack</MenuItem>,
+                ...racks.map(r => <MenuItem key={r} value={r}>{r}</MenuItem>),
+              ]}
+            </FormField>
+          </Box>
         </Box>
 
         {/* ── Image & Notes ── */}

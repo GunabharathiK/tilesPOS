@@ -6,6 +6,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true },
     phone: { type: String, required: true, unique: true, trim: true },
     password: { type: String, required: true },
+    passwordResetOtpHash: { type: String, default: null },
+    passwordResetOtpExpires: { type: Date, default: null },
     role: {
       type: String,
       enum: ["admin", "staff"],

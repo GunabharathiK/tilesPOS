@@ -260,7 +260,7 @@ const SupplierPayment = () => {
   const selStyle = { ...inp(), cursor: "pointer", appearance: "auto" };
 
   return (
-    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100vh", p: 3 }}>
+    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100%", p: 0 }}>
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 2, alignItems: "start" }}>
         <Box
           sx={{

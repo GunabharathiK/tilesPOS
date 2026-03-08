@@ -272,7 +272,12 @@ const Dashboard = () => {
   const now      = new Date();
   const todayStr = now.toDateString();
   const salesInvoices = useMemo(
-    () => invoices.filter((i) => (i.documentType || "invoice") !== "quotation"),
+    () =>
+      invoices.filter((i) => {
+        const isQuotation = String(i?.documentType || "").toLowerCase() === "quotation"
+          || String(i?.invoiceNo || "").toUpperCase().startsWith("QTN");
+        return !isQuotation;
+      }),
     [invoices]
   );
   const recentInvoices = useMemo(
@@ -363,9 +368,9 @@ const Dashboard = () => {
 
   return (
     <Box sx={{
-      p: { xs:1.5, md:2.5 },
+      p: 0,
       background: "#f0f4f9",
-      minHeight: "100vh",
+      minHeight: "100%",
       fontFamily: "'Noto Sans', sans-serif",
       display: "flex", flexDirection: "column", gap: 2,
     }}>

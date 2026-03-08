@@ -6,6 +6,7 @@ import Invoice         from "../pages/Invoice";
 import InvoicePreview  from "../pages/InvoicePreview";
 import CustomerList    from "../pages/CustomerList";
 import Customers       from "../pages/Customers";
+import Reports         from "../pages/Reports";
 import Settings        from "../pages/Settings";
 import Login           from "../pages/Login";
 
@@ -55,7 +56,9 @@ const AppRoutes = () => {
           <Route path="customers"          element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/create"   element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/bill"     element={<AdminRoute><Customers /></AdminRoute>} />
+          <Route path="customers/details" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/payments" element={<AdminRoute><Customers /></AdminRoute>} />
+          <Route path="reports"            element={<AdminRoute><Reports /></AdminRoute>} />
           <Route path="bill-format"        element={<AdminRoute><Navigate to="/settings" replace /></AdminRoute>} />
 
           {/* Admin only */}

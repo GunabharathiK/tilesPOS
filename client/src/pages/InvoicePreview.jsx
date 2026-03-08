@@ -37,7 +37,7 @@ const InvoicePreview = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0, minHeight: "100%" }}>
       {/* ACTION BUTTONS */}
       <Box sx={{ mb: 2 }}>
         <Button

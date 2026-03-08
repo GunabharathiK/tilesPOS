@@ -6,8 +6,13 @@ exports.createOrUpdateCustomer = async (req, res) => {
     const {
       name,
       phone,
+      alternateMobile,
       address,
+      city,
+      gstin,
       customerType,
+      paymentTerms,
+      dealerDetails,
       amount,
       status,
       method,
@@ -20,8 +25,13 @@ exports.createOrUpdateCustomer = async (req, res) => {
     if (customer) {
       // Update details in case they changed
       customer.phone = phone || customer.phone;
+      customer.alternateMobile = alternateMobile || customer.alternateMobile;
       customer.address = address || customer.address;
+      customer.city = city || customer.city;
+      customer.gstin = gstin || customer.gstin;
       customer.customerType = customerType || customer.customerType;
+      customer.paymentTerms = paymentTerms || customer.paymentTerms;
+      customer.dealerDetails = dealerDetails || customer.dealerDetails;
 
       if (Number(amount) > 0) {
         customer.totalSpent += Number(amount);
@@ -35,8 +45,13 @@ exports.createOrUpdateCustomer = async (req, res) => {
       customer = await Customer.create({
         name,
         phone: phone || "",
+        alternateMobile: alternateMobile || "",
         address: address || "",
+        city: city || "",
+        gstin: gstin || "",
         customerType: customerType || "Retail Customer",
+        paymentTerms: paymentTerms || "Cash Only",
+        dealerDetails: dealerDetails || {},
         totalSpent: Number(amount) || 0,
         lastPurchase: new Date(),
         status: status || "Pending",

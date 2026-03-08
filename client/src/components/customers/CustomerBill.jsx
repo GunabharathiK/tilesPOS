@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Autocomplete,
   Box,
@@ -18,19 +18,15 @@ import {
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
-import WhatsAppIcon from "@mui/icons-material/WhatsApp";
-import VisibilityIcon from "@mui/icons-material/Visibility";
 import SaveIcon from "@mui/icons-material/Save";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import toast from "react-hot-toast";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 import { getProducts } from "../../services/productService";
 import { getCustomers, saveCustomer } from "../../services/customerService";
-import { createInvoice, finalizeInvoiceStock } from "../../services/invoiceService";
-import InvoicePrint from "../billing/InvoicePrint";
+import { createInvoice } from "../../services/invoiceService";
 import { useAuth } from "../../context/AuthContext";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const emptyItem = {
   productId: "",
@@ -63,6 +59,7 @@ const defaultShopSettings = {
 
 const salesPersonOptions = ["Owner", "Counter Sales", "Floor Sales"];
 const saleTypeOptions = ["Retail Customer", "Dealer", "Contractor", "Builder / Project"];
+const transportModeOptions = ["Own Vehicle", "Truck", "Tempo", "Courier", "Other"];
 const fmt = (n = 0) => Number(n).toFixed(2);
 
 const normalizeCustomerType = (value) => {
@@ -71,6 +68,9 @@ const normalizeCustomerType = (value) => {
   if (value === "Builder / Project") return "Builder / Project";
   return "Retail Customer";
 };
+
+const getCustomerSaleType = (customer) =>
+  normalizeCustomerType(customer?.customerType || customer?.saleType || "Retail Customer");
 
 const getRateBySaleType = (product, saleType) => {
   const retail = Number(product?.price || 0);
@@ -189,18 +189,20 @@ const getCoveragePerBox = (product) => {
 
 const CustomerBill = () => {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [items, setItems] = useState([]);
   const [extraGst, setExtraGst] = useState("");
   const [extraDiscount, setExtraDiscount] = useState("");
+  const [loadingCharge, setLoadingCharge] = useState("");
   const [transportCharge, setTransportCharge] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paymentType, setPaymentType] = useState("Full Payment");
   const [partialAmount, setPartialAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [invoiceData, setInvoiceData] = useState(null);
   const [payingAmountError, setPayingAmountError] = useState("");
   const [shopSettings, setShopSettings] = useState(defaultShopSettings);
   const [calculator, setCalculator] = useState({
@@ -209,13 +211,17 @@ const CustomerBill = () => {
     wastage: "",
     coverage: "",
   });
-  const previewRef = useRef(null);
   const [billMeta, setBillMeta] = useState({
     date: new Date().toISOString().slice(0, 10),
     salesPerson: user?.name || salesPersonOptions[0],
     saleType: normalizeCustomerType(saleTypeOptions[0]),
     gstin: "",
     siteAddress: "",
+    dealerTier: "",
+    paymentTerms: "",
+    transportMode: "Own Vehicle",
+    vehicleNo: "",
+    ewayBillNo: "",
     notes: "",
   });
 
@@ -238,12 +244,90 @@ const CustomerBill = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedCustomer) return;
+    const editInvoice = location.state?.editInvoice;
+    const editCustomer = location.state?.editCustomer;
+    if (!editInvoice) return;
+
+    const normalizedType = normalizeCustomerType(
+      editInvoice?.customerType ||
+      editInvoice?.saleType ||
+      editInvoice?.customer?.customerType ||
+      editInvoice?.customer?.saleType ||
+      editCustomer?.customerType ||
+      editCustomer?.saleType
+    );
+
+    setSelectedCustomer({
+      name: editCustomer?.name || editInvoice?.customer?.name || "",
+      phone: editCustomer?.phone || editInvoice?.customer?.phone || "",
+      address: editCustomer?.address || editInvoice?.customer?.address || "",
+      gstin: editCustomer?.gstin || editInvoice?.customer?.gstin || "",
+      customerType: normalizedType,
+      saleType: normalizedType,
+      paymentTerms: editCustomer?.paymentTerms || "",
+      dealerDetails: {
+        paymentTerms: editCustomer?.paymentTerms || "",
+      },
+    });
+
     setBillMeta((prev) => ({
       ...prev,
-      siteAddress: prev.siteAddress || selectedCustomer.address || "",
+      date: (() => {
+        const parsed = new Date(editInvoice?.date || "");
+        return Number.isNaN(parsed.getTime()) ? prev.date : parsed.toISOString().slice(0, 10);
+      })(),
+      saleType: normalizedType,
+      gstin: editInvoice?.customer?.gstin || editCustomer?.gstin || "",
+      siteAddress: editInvoice?.customer?.address || editCustomer?.address || "",
+      dealerTier: editInvoice?.customer?.dealerTier || editInvoice?.businessMeta?.dealerTier || "",
+      paymentTerms: editInvoice?.customer?.paymentTerms || editInvoice?.businessMeta?.paymentTerms || editCustomer?.paymentTerms || "",
+      transportMode: editInvoice?.customer?.transportMode || editInvoice?.businessMeta?.transportMode || "Own Vehicle",
+      vehicleNo: editInvoice?.customer?.vehicleNo || editInvoice?.businessMeta?.vehicleNo || "",
+      ewayBillNo: editInvoice?.customer?.ewayBillNo || editInvoice?.businessMeta?.ewayBillNo || "",
+      notes: editInvoice?.notes || "",
+    }));
+
+    const incomingItems = Array.isArray(editInvoice?.items) ? editInvoice.items : [];
+    setItems(
+      incomingItems.map((item) => ({
+        ...emptyItem,
+        ...item,
+        productId: item.productId || "",
+        quantity: item.quantity ?? "",
+        boxes: item.boxes ?? "",
+        gst: Number(item.gst || 0),
+        discount: Number(item.discount || 0),
+        price: Number(item.price || 0),
+        total: Number(item.total || 0),
+        gstAmount: Number(item.gstAmount || 0),
+        discountAmount: Number(item.discountAmount || 0),
+        confirmed: true,
+      }))
+    );
+
+    setExtraGst(editInvoice?.tax !== undefined ? String(editInvoice.tax) : "");
+    setExtraDiscount(editInvoice?.charges?.extraDiscount !== undefined ? String(editInvoice.charges.extraDiscount) : "");
+    setLoadingCharge(editInvoice?.charges?.loading !== undefined ? String(editInvoice.charges.loading) : "");
+    setTransportCharge(editInvoice?.charges?.transport !== undefined ? String(editInvoice.charges.transport) : "");
+    setPaymentMethod(editInvoice?.payment?.method || "CASH");
+    setPaymentType(editInvoice?.payment?.paymentType || "Full Payment");
+    setPartialAmount(editInvoice?.payment?.paidAmount !== undefined ? String(editInvoice.payment.paidAmount || "") : "");
+  }, [location.state]);
+
+  useEffect(() => {
+    const details = selectedCustomer?.dealerDetails || {};
+    setBillMeta((prev) => ({
+      ...prev,
+      saleType: getCustomerSaleType(selectedCustomer),
+      siteAddress: selectedCustomer ? (prev.siteAddress || selectedCustomer.address || "") : "",
+      gstin: selectedCustomer ? (selectedCustomer.gstin || details.gstin || prev.gstin || "") : "",
+      dealerTier: selectedCustomer ? (details.dealerTier || prev.dealerTier || "") : "",
+      paymentTerms: selectedCustomer ? (details.paymentTerms || selectedCustomer.paymentTerms || prev.paymentTerms || "") : "",
+      notes: selectedCustomer ? (details.notes || prev.notes || "") : prev.notes,
     }));
   }, [selectedCustomer]);
+
+  const isBusinessSale = billMeta.saleType !== "Retail Customer";
 
   useEffect(() => {
     if (paymentType !== "Partial") {
@@ -251,6 +335,12 @@ const CustomerBill = () => {
       setPayingAmountError("");
     }
   }, [paymentType]);
+
+  useEffect(() => {
+    if (!isBusinessSale) return;
+    const advance = Number(partialAmount) || 0;
+    setPaymentType(advance > 0 ? "Partial" : "Full Payment");
+  }, [isBusinessSale, partialAmount]);
 
   const invoiceNumberPreview = useMemo(() => {
     const nextNumber = Number(shopSettings.nextInvoiceNumber) || 1;
@@ -384,9 +474,10 @@ const CustomerBill = () => {
     const base = confirmedItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.price || 0), 0);
     const itemGstAmount = confirmedItems.reduce((sum, item) => sum + Number(item.gstAmount || 0), 0);
     const subTotal = base + itemGstAmount - itemDiscountAmount;
+    const loadingAmount = Number(loadingCharge) || 0;
     const transportAmount = Number(transportCharge) || 0;
     const extraDiscountAmount = Number(extraDiscount) || 0;
-    const taxable = Math.max(0, subTotal + transportAmount - extraDiscountAmount);
+    const taxable = Math.max(0, subTotal + loadingAmount + transportAmount - extraDiscountAmount);
     const extraGstAmount = (taxable * (Number(extraGst) || 0)) / 100;
     const finalAmount = taxable + extraGstAmount;
 
@@ -394,13 +485,14 @@ const CustomerBill = () => {
       base,
       itemGstAmount,
       subTotal,
+      loadingAmount,
       transportAmount,
       extraDiscountAmount,
       taxable,
       extraGstAmount,
       finalAmount,
     };
-  }, [confirmedItems, extraDiscount, extraGst, itemDiscountAmount, transportCharge]);
+  }, [confirmedItems, extraDiscount, extraGst, itemDiscountAmount, loadingCharge, transportCharge]);
 
   useEffect(() => {
     if (paymentType !== "Partial") {
@@ -464,6 +556,13 @@ const CustomerBill = () => {
 
   const handleSubmit = async () => {
     if (!validateBeforeSave()) return;
+    const customerBusinessDetails = selectedCustomer?.dealerDetails || {};
+    const moveToPaymentSummary = {
+      paidAmount: 0,
+      dueAmount: totals.finalAmount,
+      status: "Pending",
+      paymentType: "Pending",
+    };
 
     const invoiceNo = generateInvoiceNo();
     const payload = {
@@ -472,6 +571,14 @@ const CustomerBill = () => {
         phone: selectedCustomer.phone || "",
         address: billMeta.siteAddress || selectedCustomer.address || "",
         gstin: billMeta.gstin || "",
+        dealerTier: billMeta.dealerTier || "",
+        paymentTerms: billMeta.paymentTerms || "",
+        transportMode: billMeta.transportMode || "",
+        vehicleNo: billMeta.vehicleNo || "",
+        ewayBillNo: billMeta.ewayBillNo || "",
+        bankAccountNo: customerBusinessDetails.bankAccountNo || selectedCustomer.bankAccountNo || "",
+        ifscCode: customerBusinessDetails.ifscCode || selectedCustomer.ifscCode || "",
+        accountHolder: customerBusinessDetails.ownerName || selectedCustomer.accountHolder || "",
         customerType: normalizeCustomerType(billMeta.saleType || saleTypeOptions[0]),
         saleType: normalizeCustomerType(billMeta.saleType || saleTypeOptions[0]),
       },
@@ -495,6 +602,7 @@ const CustomerBill = () => {
       taxAmount: totals.extraGstAmount,
       discountAmount: totals.extraDiscountAmount + itemDiscountAmount,
       charges: {
+        loading: totals.loadingAmount,
         transport: totals.transportAmount,
         extraDiscount: totals.extraDiscountAmount,
       },
@@ -502,15 +610,27 @@ const CustomerBill = () => {
       salesPerson: billMeta.salesPerson,
       customerType: normalizeCustomerType(billMeta.saleType || saleTypeOptions[0]),
       saleType: normalizeCustomerType(billMeta.saleType || saleTypeOptions[0]),
+      businessMeta: isBusinessSale
+        ? {
+            dealerTier: billMeta.dealerTier || "",
+            paymentTerms: billMeta.paymentTerms || "",
+            transportMode: billMeta.transportMode || "",
+            vehicleNo: billMeta.vehicleNo || "",
+            ewayBillNo: billMeta.ewayBillNo || "",
+            bankAccountNo: customerBusinessDetails.bankAccountNo || selectedCustomer.bankAccountNo || "",
+            ifscCode: customerBusinessDetails.ifscCode || selectedCustomer.ifscCode || "",
+            accountHolder: customerBusinessDetails.ownerName || selectedCustomer.accountHolder || "",
+          }
+        : undefined,
       payment: {
-        method: paymentType === "Pending" ? "" : paymentMethod,
+        method: "",
         amount: totals.finalAmount,
-        paidAmount: paymentSummary.paidAmount,
-        dueAmount: paymentSummary.dueAmount,
-        paymentType,
+        paidAmount: moveToPaymentSummary.paidAmount,
+        dueAmount: moveToPaymentSummary.dueAmount,
+        paymentType: moveToPaymentSummary.paymentType,
       },
       reduceStockNow: false,
-      status: paymentSummary.status,
+      status: moveToPaymentSummary.status,
       invoiceNo,
       date: new Date(`${billMeta.date}T${new Date().toTimeString().slice(0, 8)}`).toLocaleString(),
     };
@@ -518,36 +638,35 @@ const CustomerBill = () => {
     setLoading(true);
     try {
       const res = await createInvoice(payload);
-      setInvoiceData(res.data);
       await saveCustomer({
         ...payload.customer,
         amount: totals.finalAmount,
-        status: paymentSummary.status,
-        method: paymentType === "Pending" ? "" : paymentMethod,
+        status: moveToPaymentSummary.status,
+        method: "",
       });
       incrementInvoiceCounter();
-      toast.success("Bill saved");
+      const createdInvoice = res?.data || {};
+      toast.success("Moved to payment");
+      resetBillForm();
+      navigate("/customers/payments", {
+        state: {
+          fromMoveToPayment: true,
+          prefillCustomer: {
+            name: payload.customer?.name || "",
+            phone: payload.customer?.phone || "",
+          },
+          prefillInvoice: {
+            id: createdInvoice?._id || "",
+            invoiceNo: createdInvoice?.invoiceNo || payload.invoiceNo || "",
+            dueAmount: Number(createdInvoice?.payment?.dueAmount || payload.payment?.dueAmount || 0),
+          },
+        },
+      });
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to create bill");
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDownload = async () => {
-    if (!invoiceData) return;
-    const element = document.getElementById("customer-invoice-preview");
-    if (!element) return;
-    const canvas = await html2canvas(element, { scale: 2 });
-    const pdf = new jsPDF("p", "mm", "a4");
-    const imgWidth = 210;
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, imgWidth, (canvas.height * imgWidth) / canvas.width);
-    pdf.save(`Invoice-${invoiceData.invoiceNo}.pdf`);
-  };
-
-  const handlePrint = () => {
-    if (!invoiceData) return;
-    window.print();
   };
 
   const resetBillForm = () => {
@@ -556,11 +675,11 @@ const CustomerBill = () => {
     setItems([]);
     setExtraGst(savedSettings.defaultTax === 0 ? "" : String(savedSettings.defaultTax));
     setExtraDiscount(savedSettings.defaultDiscount === 0 ? "" : String(savedSettings.defaultDiscount));
+    setLoadingCharge("");
     setTransportCharge("");
     setPaymentMethod("CASH");
     setPaymentType("Full Payment");
     setPartialAmount("");
-    setInvoiceData(null);
     setPayingAmountError("");
     setBillMeta({
       date: new Date().toISOString().slice(0, 10),
@@ -568,40 +687,21 @@ const CustomerBill = () => {
       saleType: normalizeCustomerType(saleTypeOptions[0]),
       gstin: "",
       siteAddress: "",
+      dealerTier: "",
+      paymentTerms: "",
+      transportMode: "Own Vehicle",
+      vehicleNo: "",
+      ewayBillNo: "",
       notes: "",
     });
   };
 
-  const handleDone = async () => {
-    try {
-      if (invoiceData?._id && !invoiceData?.stockReduced) {
-        const res = await finalizeInvoiceStock(invoiceData._id);
-        setInvoiceData(res.data);
-        await fetchAll();
-      }
-      resetBillForm();
-      toast.success("Bill completed");
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to update stock");
-    }
-  };
-
-  const handleWhatsapp = () => {
-    if (!invoiceData) {
-      toast.error("Save the bill first");
-      return;
-    }
-    if (!shopSettings.whatsappNumber) {
-      toast.error("Add WhatsApp number in settings");
-      return;
-    }
-    toast.success(`Ready to send invoice ${invoiceData.invoiceNo} to WhatsApp`);
-  };
 
   const summaryRows = [
     ["Subtotal", `Rs.${fmt(totals.subTotal)}`],
     ["Item Discounts", `-Rs.${fmt(itemDiscountAmount)}`],
-    ["Extra Discount", `-Rs.${fmt(totals.extraDiscountAmount)}`],
+    ["Loading Charges", `+Rs.${fmt(totals.loadingAmount)}`],
+    ["Special Discount", `-Rs.${fmt(totals.extraDiscountAmount)}`],
     ["Transport", `+Rs.${fmt(totals.transportAmount)}`],
     [`GST (${Number(extraGst) || 0}%)`, `Rs.${fmt(totals.extraGstAmount)}`],
     ["Total", `Rs.${fmt(totals.finalAmount)}`, true],
@@ -633,16 +733,11 @@ const CustomerBill = () => {
         });
   }, [billMeta.date]);
 
-  useEffect(() => {
-    if (!invoiceData) return;
-    previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [invoiceData]);
-
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, background: pageBg, minHeight: "100vh" }}>
+    <Box sx={{ p: 0, background: pageBg, minHeight: "100%" }}>
       <Box sx={{ mb: 1.8 }}>
         <Typography sx={{ fontSize: 28, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>
-          New Retail Bill
+          {isBusinessSale ? "New Business Bill" : "New Retail Bill"}
         </Typography>
         <Typography sx={{ mt: 0.5, fontSize: 12, color: "#64748b" }}>
           {topDateLabel}
@@ -672,6 +767,23 @@ const CustomerBill = () => {
             </Box>
 
             <Box sx={{ p: 2.2 }}>
+              {isBusinessSale ? (
+                <Box
+                  sx={{
+                    mb: 1.5,
+                    p: 1.1,
+                    borderRadius: "10px",
+                    background: "#f4efff",
+                    border: "1px solid #dacdf8",
+                    color: "#5a35a5",
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Bulk / business mode enabled for selected customer type.
+                </Box>
+              ) : null}
+
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5, mb: 1.5 }}>
                 <Box>
                   <Typography sx={fieldLabelSx}>Date *</Typography>
@@ -720,19 +832,12 @@ const CustomerBill = () => {
                 <Box>
                   <Typography sx={fieldLabelSx}>Customer Type</Typography>
                   <TextField
-                    select
                     fullWidth
                     size="small"
                     value={billMeta.saleType}
-                    onChange={(e) => setBillMeta((prev) => ({ ...prev, saleType: normalizeCustomerType(e.target.value) }))}
                     sx={inputSx}
-                  >
-                    {saleTypeOptions.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                    InputProps={{ readOnly: true }}
+                  />
                 </Box>
               </Box>
 
@@ -784,6 +889,68 @@ const CustomerBill = () => {
                   />
                 </Box>
               </Box>
+
+              {isBusinessSale ? (
+                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 1.5 }}>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Dealer / Business Tier</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={billMeta.dealerTier}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, dealerTier: e.target.value }))}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Payment Terms</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={billMeta.paymentTerms}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, paymentTerms: e.target.value }))}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Transport Mode</Typography>
+                    <TextField
+                      select
+                      fullWidth
+                      size="small"
+                      value={billMeta.transportMode}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, transportMode: e.target.value }))}
+                      sx={inputSx}
+                    >
+                      {transportModeOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Lorry / Vehicle No.</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={billMeta.vehicleNo}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, vehicleNo: e.target.value.toUpperCase() }))}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>E-Way Bill No.</Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      value={billMeta.ewayBillNo}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, ewayBillNo: e.target.value }))}
+                      sx={inputSx}
+                    />
+                  </Box>
+                </Box>
+              ) : null}
             </Box>
           </Card>
 
@@ -986,6 +1153,91 @@ const CustomerBill = () => {
             </Box>
           </Card>
 
+          {isBusinessSale ? (
+            <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
+              <Box sx={cardHeaderSx}>
+                <Typography sx={panelTitleSx}>
+                  <Box component="span" sx={{ color: "#7c3aed" }}>+</Box>
+                  Bulk Charges
+                </Typography>
+              </Box>
+              <Box sx={{ p: 2.1 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Loading Charges (Rs.)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={loadingCharge}
+                      onChange={(e) => setLoadingCharge(e.target.value)}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Transport (Rs.)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={transportCharge}
+                      onChange={(e) => setTransportCharge(e.target.value)}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>GST Rate</Typography>
+                    <TextField
+                      select
+                      size="small"
+                      fullWidth
+                      value={extraGst}
+                      onChange={(e) => setExtraGst(e.target.value)}
+                      sx={inputSx}
+                    >
+                      {["0", "5", "12", "18", "28"].map((option) => (
+                        <MenuItem key={option} value={option}>{option}%</MenuItem>
+                      ))}
+                    </TextField>
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Advance / Token (Rs.)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={partialAmount}
+                      onChange={(e) => setPartialAmount(e.target.value)}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box sx={{ gridColumn: { xs: "span 1", md: "span 2" } }}>
+                    <Typography sx={fieldLabelSx}>Special Scheme Discount (Rs.)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={extraDiscount}
+                      onChange={(e) => setExtraDiscount(e.target.value)}
+                      sx={inputSx}
+                    />
+                  </Box>
+                  <Box sx={{ gridColumn: { xs: "span 1", md: "span 2" } }}>
+                    <Typography sx={fieldLabelSx}>Internal Notes</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={billMeta.notes}
+                      onChange={(e) => setBillMeta((prev) => ({ ...prev, notes: e.target.value }))}
+                      sx={inputSx}
+                      placeholder="Scheme / Remarks"
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </Card>
+          ) : null}
+
         </Box>
 
         <Box>
@@ -1046,7 +1298,7 @@ const CustomerBill = () => {
                 variant="contained"
                 startIcon={<SaveIcon />}
                 onClick={handleSubmit}
-                disabled={loading || Boolean(invoiceData)}
+                disabled={loading}
                 sx={{
                   mt: 1.5,
                   borderRadius: "10px",
@@ -1058,7 +1310,7 @@ const CustomerBill = () => {
                   "&:hover": { background: "#146038" },
                 }}
               >
-                {loading ? "Generating..." : "Generate Bill"}
+                {loading ? "Moving..." : "Move to Payment"}
               </Button>
 
               <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mt: 1.5 }}>
@@ -1146,92 +1398,6 @@ const CustomerBill = () => {
         </Box>
       </Box>
 
-      {invoiceData && (
-        <>
-          <Card ref={previewRef} sx={{ ...sectionCardSx, mt: 2.2 }}>
-            <Box sx={cardHeaderSx}>
-              <Typography sx={panelTitleSx}>
-                Invoice Preview
-              </Typography>
-            </Box>
-            <Box sx={{ p: 2.2, background: "#fff", overflowX: "auto" }}>
-              <Box id="customer-invoice-preview" sx={{ minWidth: 820 }}>
-                <InvoicePrint data={invoiceData} />
-              </Box>
-            </Box>
-          </Card>
-
-          <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
-            <Box sx={cardHeaderSx}>
-              <Typography sx={panelTitleSx}>Actions</Typography>
-            </Box>
-            <Box sx={{ p: 2.1, display: "flex", flexWrap: "wrap", gap: 1.1 }}>
-              <Button
-                variant="contained"
-                startIcon={<VisibilityIcon />}
-                onClick={handleDownload}
-                sx={{
-                  borderRadius: "10px",
-                  py: 1.15,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  background: `linear-gradient(135deg, ${primary}, ${primaryDark})`,
-                }}
-              >
-                Download
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={handlePrint}
-                sx={{
-                  borderRadius: "10px",
-                  py: 1.15,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                }}
-              >
-                Print
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<WhatsAppIcon />}
-                onClick={handleWhatsapp}
-                sx={{
-                  borderRadius: "10px",
-                  py: 1.15,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  background: "#25D366",
-                  "&:hover": { background: "#1ebe59" },
-                }}
-              >
-                Send on WhatsApp
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<CheckCircleIcon />}
-                onClick={handleDone}
-                sx={{
-                  borderRadius: "10px",
-                  py: 1.15,
-                  px: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                  background: "#f8fafc",
-                  color: "#1c2333",
-                  border: `1px solid ${border}`,
-                  boxShadow: "none",
-                }}
-              >
-                Done
-              </Button>
-            </Box>
-          </Card>
-        </>
-      )}
     </Box>
   );
 };

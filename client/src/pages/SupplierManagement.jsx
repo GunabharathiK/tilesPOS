@@ -183,7 +183,7 @@ const SupplierManagement = () => {
   }
 
   return (
-    <Box sx={{ p: 3, background: T.bg, minHeight: "100vh" }}>
+    <Box sx={{ p: 0, background: T.bg, minHeight: "100%" }}>
       <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", mb: 0.8 }}>
         <Typography sx={{ fontSize: 22, fontWeight: 700, color: T.dark, fontFamily: "'Rajdhani', sans-serif" }}>
           Supplier Management

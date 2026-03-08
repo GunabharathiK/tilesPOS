@@ -1,10 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const { login, register, getMe, getUsers, deleteUser } = require("../controllers/authController");
+const {
+  login,
+  register,
+  getMe,
+  getUsers,
+  deleteUser,
+  requestAdminForgotPasswordOtp,
+  resetAdminPasswordWithOtp,
+} = require("../controllers/authController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 // Public
 router.post("/login", login);
+router.post("/admin/forgot-password/request-otp", requestAdminForgotPasswordOtp);
+router.post("/admin/forgot-password/reset", resetAdminPasswordWithOtp);
 
 // Logged in user
 router.get("/me", protect, getMe);

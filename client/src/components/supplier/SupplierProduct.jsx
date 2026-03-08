@@ -386,7 +386,7 @@ const SupplierProduct = () => {
 
   /* ════════════════════════════════════════════════════════════ */
   return (
-    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100vh", p: 3 }}>
+    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100%", p: 0 }}>
       <Box sx={{
         background: T.white, borderRadius: "10px",
         border: `1px solid ${T.border}`, boxShadow: "0 1px 4px rgba(0,0,0,.06)",

@@ -3,7 +3,7 @@ import SupplierDetails from "../components/supplier/SupplierDetails";
 
 const SupplierProductDetails = () => {
   return (
-    <Box sx={{ p: 3, background: "#f0f4f8", minHeight: "100vh" }}>
+    <Box sx={{ p: 0, background: "#f0f4f8", minHeight: "100%" }}>
       <Typography sx={{ fontSize: 22, fontWeight: 700, color: "#1c2333", fontFamily: "'Rajdhani', sans-serif", mb: 0.3 }}>
         Supplier Product Details
       </Typography>

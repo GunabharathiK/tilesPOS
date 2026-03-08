@@ -156,7 +156,7 @@ const parseSizeToLengthWidth = (size = "") => {
 
 const normalize = (value = "") => String(value).trim().toLowerCase();
 
-const SupplierAddItem = ({ embedded = false }) => {
+const SupplierAddItem = ({ embedded = false, onSaved }) => {
   const [suppliers, setSuppliers] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [supplierPurchases, setSupplierPurchases] = useState([]);
@@ -407,6 +407,7 @@ const SupplierAddItem = ({ embedded = false }) => {
     try {
       await createProduct(payload);
       toast.success("Supplier product added");
+      if (typeof onSaved === "function") await onSaved();
       handleReset();
     } catch (err) {
       const msg = err?.response?.data?.error || "";

@@ -82,9 +82,10 @@ exports.createInvoice = async (req, res) => {
     const itemDiscountTotal = round2(normalizedItems.reduce((sum, item) => sum + (Number(item.discountAmount) || 0), 0));
     const discountPercent = Number(body.discount) || 0;
     const discountPercentAmount = round2((itemSubTotal * discountPercent) / 100);
+    const loadingCharge = round2(Number(body?.charges?.loading) || Number(body?.charges?.loadingCharge) || 0);
     const transportCharge = round2(Number(body?.charges?.transport) || 0);
     const extraDiscount = round2(Number(body?.charges?.extraDiscount) || 0);
-    const taxableBase = round2(Math.max(0, itemSubTotal - discountPercentAmount - extraDiscount + transportCharge));
+    const taxableBase = round2(Math.max(0, itemSubTotal - discountPercentAmount - extraDiscount + loadingCharge + transportCharge));
     const tax = Number(body.tax) || 0;
     const taxAmount = round2((taxableBase * tax) / 100);
     const totalAmount = round2(taxableBase + taxAmount);
@@ -116,6 +117,7 @@ exports.createInvoice = async (req, res) => {
     body.discountAmount = round2(itemDiscountTotal + discountPercentAmount + extraDiscount);
     body.charges = {
       ...(body.charges || {}),
+      loading: loadingCharge,
       transport: transportCharge,
       extraDiscount,
     };

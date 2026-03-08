@@ -106,7 +106,7 @@ const CustomerList = () => {
   }, [invoices]);
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 }, background: "#f0f4f8", minHeight: "100vh" }}>
+    <Box sx={{ p: 0, background: "#f0f4f8", minHeight: "100%" }}>
       <Box
         sx={{
           mb: 3,

@@ -11,11 +11,13 @@ import InventoryIcon         from "@mui/icons-material/Inventory";
 import FileDownloadIcon      from "@mui/icons-material/FileDownload";
 import AddIcon               from "@mui/icons-material/Add";
 import TuneIcon              from "@mui/icons-material/Tune";
-import { useState, useEffect, useMemo } from "react";
+import UploadFileIcon        from "@mui/icons-material/UploadFile";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getProducts, updateProduct, deleteProduct } from "../../services/productService";
+import { createProduct, getProducts, updateProduct, deleteProduct } from "../../services/productService";
 import ConfirmDialog from "../common/ConfirmDialog";
 import toast from "react-hot-toast";
+import { mapRowByFieldAliases, parseCsvRows } from "../../utils/importByField";
 
 /* ── Design tokens ──────────────────────────────────────────── */
 const T = {
@@ -337,6 +339,7 @@ const ViewDialog = ({ product: p, open, onClose, onEdit }) => {
 ══════════════════════════════════════════════════════════════ */
 const ProductDetails = () => {
   const navigate = useNavigate();
+  const importInputRef = useRef(null);
   const [products,    setProducts]    = useState([]);
   const [search,      setSearch]      = useState("");
   const [tab,         setTab]         = useState("all");
@@ -346,6 +349,7 @@ const ProductDetails = () => {
   const [sortBy,      setSortBy]      = useState("name");
   const [viewProduct, setViewProduct] = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [importing,   setImporting]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
 
   const fetchProducts = async () => {
@@ -404,6 +408,101 @@ const ProductDetails = () => {
   }, [products, search, tab, stockF, categoryF, brandF, sortBy]);
 
   const lowStock = products.filter((p) => Number(p.stock || 0) < 10).length;
+
+  const importAliases = {
+    name: ["productname", "tilename", "itemname"],
+    code: ["sku", "productcode", "itemcode"],
+    category: ["type"],
+    brand: ["company"],
+    size: ["dimensions"],
+    uom: ["unit"],
+    price: ["baseprice", "rate", "sellingprice"],
+    gst: ["gstrate", "tax", "taxpercent"],
+    stock: ["quantity", "stockqty", "stocksqft", "stockunits"],
+    dealerPrice: ["dealerprice", "wholesaleprice"],
+    contractorPrice: ["contractorprice", "builderprice"],
+    purchasePrice: ["buyprice", "costprice"],
+    minimumSellPrice: ["minsellprice", "minimumprice"],
+    stockBoxes: ["boxes", "stockboxes"],
+    coverageArea: ["coverage", "coverageareapersqft", "coverageperbox"],
+    hsnCode: ["hsn", "hsnno"],
+    rackLocation: ["rack", "location"],
+    notes: ["remark", "remarks", "description"],
+  };
+
+  const toNumber = (v, fallback = 0) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  };
+
+  const handleImportClick = () => importInputRef.current?.click();
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      if (!rows.length) {
+        toast.error("No import rows found");
+        return;
+      }
+
+      const payloads = rows
+        .map((row) => mapRowByFieldAliases(row, importAliases))
+        .map((mapped) => {
+          const name = String(mapped.name || "").trim();
+          const code = String(mapped.code || "").trim().toUpperCase();
+          if (!name || !code) return null;
+
+          const price = toNumber(mapped.price, 0);
+          const gst = toNumber(mapped.gst, 0);
+          const payload = {
+            name,
+            code,
+            category: mapped.category || "",
+            brand: mapped.brand || "",
+            size: mapped.size || "",
+            uom: mapped.uom || "sqrft",
+            price,
+            gst,
+            stock: toNumber(mapped.stock, 0),
+            dealerPrice: toNumber(mapped.dealerPrice, 0),
+            contractorPrice: toNumber(mapped.contractorPrice, 0),
+            purchasePrice: toNumber(mapped.purchasePrice, 0),
+            minimumSellPrice: toNumber(mapped.minimumSellPrice, 0),
+            stockBoxes: toNumber(mapped.stockBoxes, 0),
+            coverageArea: toNumber(mapped.coverageArea, 0),
+            hsnCode: mapped.hsnCode || "",
+            rackLocation: mapped.rackLocation || "",
+            notes: mapped.notes || "",
+            totalPrice: Number((price * (1 + gst / 100)).toFixed(2)),
+            isSupplierItem: false,
+          };
+          return payload;
+        })
+        .filter(Boolean);
+
+      if (!payloads.length) {
+        toast.error("Required fields missing. Ensure file has Name and Code columns.");
+        return;
+      }
+
+      const results = await Promise.allSettled(payloads.map((payload) => createProduct(payload)));
+      const success = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - success;
+      await fetchProducts();
+      if (failed > 0) toast.success(`Imported ${success}, skipped ${failed}`);
+      else toast.success(`Imported ${success} product(s)`);
+    } catch {
+      toast.error("Import failed. Use CSV with header row.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const selStyle = {
     padding: "5px 10px",
@@ -594,6 +693,20 @@ const ProductDetails = () => {
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
+          <Box
+            onClick={handleImportClick}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              px: 2, py: 1, borderRadius: "8px",
+              border: `1.5px solid ${T.border}`, cursor: "pointer",
+              fontSize: 13, fontWeight: 600, color: T.text, background: T.white,
+              "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight },
+              transition: "all .13s",
+            }}
+          >
+            <UploadFileIcon sx={{ fontSize: 16 }} /> {importing ? "Importing..." : "Import"}
+          </Box>
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" hidden onChange={handleImportFile} />
           <Box
             sx={{
               display: "inline-flex", alignItems: "center", gap: "6px",

@@ -7,15 +7,18 @@ import {
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { useEffect, useMemo, useState } from "react";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ConfirmDialog from "../common/ConfirmDialog";
 import {
+  createSupplier,
   deleteSupplier,
   getPurchases,
   getSuppliers,
 } from "../../services/supplierService";
 import toast from "react-hot-toast";
+import { mapRowByFieldAliases, parseCsvRows } from "../../utils/importByField";
 
 /* ─── Design Tokens ─────────────────────────────────────────────────────────── */
 const T = {
@@ -298,7 +301,7 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
 };
 
 /* ─── Supplier Table Row ─────────────────────────────────────────────────────── */
-const SupplierRow = ({ supplier, serial, onView, onPurchase, onPay, onDelete }) => {
+const SupplierRow = ({ supplier, serial, onView, onEditProduct, onPay, onDelete }) => {
   const totalPurchase = supplier.totalValue || 0;
   const payable       = supplier.totalDue   || 0;
   const products      = getSupplierProducts(supplier);
@@ -402,9 +405,9 @@ const SupplierRow = ({ supplier, serial, onView, onPurchase, onPay, onDelete }) 
             View
           </Box>
 
-          {/* Buy */}
+          {/* Edit */}
           <Box
-            onClick={() => onPurchase(supplier)}
+            onClick={() => onEditProduct(supplier)}
             sx={{
               display: "inline-flex", alignItems: "center", gap: "4px",
               px: "10px", py: "4px", borderRadius: "8px", cursor: "pointer",
@@ -415,8 +418,8 @@ const SupplierRow = ({ supplier, serial, onView, onPurchase, onPay, onDelete }) 
               "&:hover": { background: "#eef2ff", borderColor: "#c7d2fe" },
             }}
           >
-            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>📦</Box>
-            Buy
+            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>✏️</Box>
+            Edit
           </Box>
 
           {/* Pay */}
@@ -461,6 +464,7 @@ const SupplierRow = ({ supplier, serial, onView, onPurchase, onPay, onDelete }) 
 /* ─── Main Component ─────────────────────────────────────────────────────────── */
 const SupplierDetails = ({ onEdit, onStatsChange }) => {
   const navigate = useNavigate();
+  const importInputRef = useRef(null);
   const [suppliers,     setSuppliers]     = useState([]);
   const [purchases,     setPurchases]     = useState([]);
   const [search,        setSearch]        = useState("");
@@ -468,6 +472,7 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
   const [balFilter,     setBalFilter]     = useState("All Balance");
   const [productFilter, setProductFilter] = useState("All Products");
   const [viewSupplier,  setViewSupplier]  = useState(null);
+  const [importing,     setImporting]     = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
 
   const fetchSuppliers = async () => {
@@ -522,14 +527,123 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
   const handleAddSupplier = () =>
     onEdit ? onEdit(null) : navigate("/suppliers/create");
 
+  const importAliases = {
+    companyName: ["name", "suppliername", "dealername", "company"],
+    supplierName: ["contactperson", "ownername", "owner"],
+    companyPhone: ["phone", "mobile", "primarymobile", "contactnumber"],
+    altPhone: ["alternatemobile", "altmobile", "landline"],
+    companyEmail: ["email", "mail"],
+    companyAddress: ["address", "fulladdress"],
+    city: ["town"],
+    state: ["province"],
+    pincode: ["pin", "zipcode", "postalcode"],
+    gstin: ["gst", "gstno"],
+    paymentTerms: ["terms", "paymentterm"],
+    creditLimit: ["credit", "creditlimitrs"],
+    discountPct: ["discount", "discountpct"],
+    bankName: ["bank"],
+    accountNo: ["accountnumber", "bankaccountno"],
+    ifscCode: ["ifsc"],
+    upiId: ["upi"],
+    productsSupplied: ["products", "productssupplied"],
+    brands: ["brand", "brandssupplied"],
+    internalNotes: ["notes", "remark", "remarks"],
+  };
+
+  const normalizePhone = (value = "") => String(value).replace(/\D/g, "").slice(0, 15);
+
+  const handleImportClick = () => importInputRef.current?.click();
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const rows = parseCsvRows(text);
+      if (!rows.length) {
+        toast.error("No import rows found");
+        return;
+      }
+
+      const payloads = rows
+        .map((row) => mapRowByFieldAliases(row, importAliases))
+        .map((mapped) => {
+          const companyName = String(mapped.companyName || "").trim();
+          const companyPhone = normalizePhone(mapped.companyPhone || "");
+          if (!companyName || !companyPhone) return null;
+
+          return {
+            name: companyName,
+            phone: companyPhone,
+            address: String(mapped.companyAddress || "").trim(),
+            companyName,
+            supplierName: String(mapped.supplierName || "").trim(),
+            companyPhone,
+            altPhone: normalizePhone(mapped.altPhone || ""),
+            companyEmail: String(mapped.companyEmail || "").trim(),
+            companyAddress: String(mapped.companyAddress || "").trim(),
+            city: String(mapped.city || "").trim(),
+            state: String(mapped.state || "").trim(),
+            pincode: String(mapped.pincode || "").replace(/\D/g, "").slice(0, 6),
+            gstin: String(mapped.gstin || "").trim().toUpperCase(),
+            paymentTerms: String(mapped.paymentTerms || "Advance Payment").trim(),
+            creditLimit: Number(mapped.creditLimit || 0) || 0,
+            discountPct: Number(mapped.discountPct || 0) || 0,
+            bankName: String(mapped.bankName || "").trim(),
+            accountNo: String(mapped.accountNo || "").trim(),
+            ifscCode: String(mapped.ifscCode || "").trim().toUpperCase(),
+            upiId: String(mapped.upiId || "").trim(),
+            brands: String(mapped.brands || "").trim(),
+            internalNotes: String(mapped.internalNotes || "").trim(),
+            productsSupplied: String(mapped.productsSupplied || "")
+              .split(/[|,;/]/)
+              .map((p) => p.trim())
+              .filter(Boolean),
+          };
+        })
+        .filter(Boolean);
+
+      if (!payloads.length) {
+        toast.error("Required fields missing. Ensure file has Company Name and Mobile columns.");
+        return;
+      }
+
+      const results = await Promise.allSettled(payloads.map((payload) => createSupplier(payload)));
+      const success = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.length - success;
+      await fetchSuppliers();
+      if (failed > 0) toast.success(`Imported ${success}, skipped ${failed}`);
+      else toast.success(`Imported ${success} supplier(s)`);
+    } catch {
+      toast.error("Import failed. Use CSV with header row.");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const handleEdit = (supplier) => {
     setViewSupplier(null);
     if (onEdit) { onEdit(supplier); return; }
     navigate("/suppliers/create", { state: { editSupplier: supplier } });
   };
 
-  const handlePurchase = (supplier) =>
-    navigate("/suppliers/products", { state: { supplierId: supplier._id, supplier } });
+  const handleEditSupplierProduct = (supplier) => {
+    const supplierId = supplier?._id;
+    const latestPurchase = purchases
+      .filter((purchase) => (purchase?.supplierId?._id || purchase?.supplierId) === supplierId)
+      .sort((a, b) => new Date(b?.createdAt || b?.invoiceDate || 0) - new Date(a?.createdAt || a?.invoiceDate || 0))[0];
+
+    navigate("/suppliers/products", {
+      state: {
+        supplierId,
+        supplier,
+        editPurchase: latestPurchase || null,
+      },
+    });
+  };
 
   const handleEditPurchase = (purchase) => {
     setViewSupplier(null);
@@ -620,7 +734,9 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
           >
             <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Supplier
           </Box>
-          <Box sx={{
+          <Box
+            onClick={handleImportClick}
+            sx={{
             display: "inline-flex", alignItems: "center", gap: "6px",
             px: "14px", py: "8px", borderRadius: "8px", cursor: "pointer",
             background: T.white, color: T.text,
@@ -628,8 +744,9 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
             border: `1px solid ${T.border}`,
             "&:hover": { background: "#f9fafb" },
           }}>
-            <span style={{ color: "#16a34a", fontSize: 14 }}>⬇</span> Excel
+            <UploadFileIcon sx={{ color: "#16a34a", fontSize: 16 }} /> {importing ? "Importing..." : "Import"}
           </Box>
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" hidden onChange={handleImportFile} />
         </Box>
       </Box>
 
@@ -716,7 +833,7 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
                 supplier={supplier}
                 serial={filtered.length - index}
                 onView={setViewSupplier}
-                onPurchase={handlePurchase}
+                onEditProduct={handleEditSupplierProduct}
                 onPay={handlePay}
                 onDelete={askDelete}
               />

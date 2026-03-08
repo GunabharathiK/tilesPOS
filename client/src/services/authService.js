@@ -8,3 +8,9 @@ export const registerUser = (data) =>
 
 export const getMe = () =>
   API.get("/auth/me");
+
+export const requestAdminForgotPasswordOtp = (phone) =>
+  API.post("/auth/admin/forgot-password/request-otp", { phone });
+
+export const resetAdminPasswordWithOtp = (phone, otp, newPassword) =>
+  API.post("/auth/admin/forgot-password/reset", { phone, otp, newPassword });

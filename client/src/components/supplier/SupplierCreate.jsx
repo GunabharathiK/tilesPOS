@@ -332,7 +332,7 @@ const SupplierCreate = ({ onBack, editSupplier: editProp }) => {
   };
 
   return (
-    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100vh", p: 3 }}>
+    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100%", p: 0 }}>
 
       {/* Page title (topbar handles the main title, this is optional) */}
 
