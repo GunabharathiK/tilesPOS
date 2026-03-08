@@ -4,7 +4,7 @@ import API from "../services/api";
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);         // { name, email, role, token }
+  const [user, setUser] = useState(null);         // { name, phone, role, token }
   const [loading, setLoading] = useState(true);
 
   // ✅ On app load, restore user from localStorage

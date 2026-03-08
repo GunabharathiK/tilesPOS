@@ -1,5 +1,32 @@
 const Invoice = require("../models/Invoice");
 const Product = require("../models/Product");
+const mongoose = require("mongoose");
+
+const round2 = (value) => Math.round((Number(value) || 0) * 100) / 100;
+
+const normalizeCustomerType = (value) => {
+  if (value === "Dealer" || value === "Wholesale") return "Dealer";
+  if (value === "Contractor" || value === "B2B") return "Contractor";
+  if (value === "Builder / Project") return "Builder / Project";
+  return "Retail Customer";
+};
+
+const getPriceByCustomerType = (product, customerType) => {
+  const retail = Number(product?.price || 0);
+  const dealer = Number(product?.dealerPrice || 0);
+  const contractor = Number(product?.contractorPrice || 0);
+  const minimum = Number(product?.minimumSellPrice || 0);
+
+  if (customerType === "Dealer") return dealer > 0 ? dealer : retail;
+  if (customerType === "Contractor") return contractor > 0 ? contractor : (dealer > 0 ? dealer : retail);
+  if (customerType === "Builder / Project") {
+    if (minimum > 0) return minimum;
+    if (contractor > 0) return contractor;
+    if (dealer > 0) return dealer;
+    return retail;
+  }
+  return retail;
+};
 
 // CREATE - optionally reduce stock immediately
 exports.createInvoice = async (req, res) => {
@@ -10,16 +37,88 @@ exports.createInvoice = async (req, res) => {
       body.customer = { name: body.customer };
     }
 
-    const totalAmount = Number(body?.payment?.amount || 0);
-    const paidAmount = Number(
-      body?.payment?.paidAmount ??
-      (body.status === "Paid"
-        ? totalAmount
-        : body.status === "Partial"
-          ? Math.max(0, totalAmount - Number(body?.payment?.dueAmount || 0))
-          : 0)
+    const customerType = normalizeCustomerType(
+      body.customerType ||
+      body.saleType ||
+      body?.customer?.customerType ||
+      body?.customer?.saleType
     );
-    const dueAmount = Number(body?.payment?.dueAmount ?? Math.max(0, totalAmount - paidAmount));
+
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+    const productIds = rawItems
+      .map((item) => item?.productId)
+      .filter((id) => id && mongoose.Types.ObjectId.isValid(id));
+
+    const products = productIds.length
+      ? await Product.find({ _id: { $in: productIds } }).lean()
+      : [];
+    const productMap = new Map(products.map((product) => [String(product._id), product]));
+
+    const normalizedItems = rawItems.map((item) => {
+      const product = productMap.get(String(item.productId || ""));
+      const quantity = Number(item?.quantity) || 0;
+      const gst = Number(item?.gst) || 0;
+      const discount = Number(item?.discount) || 0;
+      const price = product ? getPriceByCustomerType(product, customerType) : (Number(item?.price) || 0);
+
+      const base = quantity * price;
+      const gstAmount = (base * gst) / 100;
+      const discountAmount = (base * discount) / 100;
+      const total = base + gstAmount - discountAmount;
+
+      return {
+        ...item,
+        quantity: round2(quantity),
+        price: round2(price),
+        gst,
+        discount,
+        gstAmount: round2(gstAmount),
+        discountAmount: round2(discountAmount),
+        total: round2(total),
+      };
+    });
+
+    const itemSubTotal = round2(normalizedItems.reduce((sum, item) => sum + (Number(item.total) || 0), 0));
+    const itemDiscountTotal = round2(normalizedItems.reduce((sum, item) => sum + (Number(item.discountAmount) || 0), 0));
+    const discountPercent = Number(body.discount) || 0;
+    const discountPercentAmount = round2((itemSubTotal * discountPercent) / 100);
+    const transportCharge = round2(Number(body?.charges?.transport) || 0);
+    const extraDiscount = round2(Number(body?.charges?.extraDiscount) || 0);
+    const taxableBase = round2(Math.max(0, itemSubTotal - discountPercentAmount - extraDiscount + transportCharge));
+    const tax = Number(body.tax) || 0;
+    const taxAmount = round2((taxableBase * tax) / 100);
+    const totalAmount = round2(taxableBase + taxAmount);
+
+    const rawPaidAmount = Number(body?.payment?.paidAmount);
+    const rawDueAmount = Number(body?.payment?.dueAmount);
+    let paidAmount = 0;
+    if (body.status === "Paid") {
+      paidAmount = totalAmount;
+    } else if (body.status === "Partial") {
+      if (Number.isFinite(rawPaidAmount) && rawPaidAmount > 0) {
+        paidAmount = Math.min(rawPaidAmount, totalAmount);
+      } else if (Number.isFinite(rawDueAmount) && rawDueAmount >= 0) {
+        paidAmount = Math.max(0, totalAmount - rawDueAmount);
+      }
+    }
+    paidAmount = round2(paidAmount);
+    const dueAmount = round2(Math.max(0, totalAmount - paidAmount));
+
+    body.customer = {
+      ...(body.customer || {}),
+      customerType,
+      saleType: customerType,
+    };
+    body.customerType = customerType;
+    body.saleType = customerType;
+    body.items = normalizedItems;
+    body.taxAmount = taxAmount;
+    body.discountAmount = round2(itemDiscountTotal + discountPercentAmount + extraDiscount);
+    body.charges = {
+      ...(body.charges || {}),
+      transport: transportCharge,
+      extraDiscount,
+    };
 
     body.payment = {
       ...(body.payment || {}),

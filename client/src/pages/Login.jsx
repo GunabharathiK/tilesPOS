@@ -8,7 +8,6 @@ import {
   InputAdornment,
   IconButton,
   Alert,
-  Divider,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
@@ -18,7 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import { loginUser } from "../services/authService";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -33,8 +32,8 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const res = await loginUser(email, password);
-      login(res.data);           // save to context + localStorage
+      const res = await loginUser(phone, password);
+      login(res.data);
       navigate("/");
     } catch (err) {
       setError(err?.response?.data?.error || "Login failed. Please try again.");
@@ -63,13 +62,16 @@ const Login = () => {
           boxShadow: "0 25px 60px rgba(0,0,0,0.4)",
         }}
       >
-        {/* Logo / Icon */}
         <Box textAlign="center" mb={3}>
           <Box
             sx={{
-              width: 60, height: 60, borderRadius: 3,
+              width: 60,
+              height: 60,
+              borderRadius: 3,
               background: "linear-gradient(135deg, #facc15, #f59e0b)",
-              display: "flex", alignItems: "center", justifyContent: "center",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
               margin: "0 auto 12px",
               boxShadow: "0 4px 15px rgba(250,204,21,0.4)",
             }}
@@ -78,9 +80,6 @@ const Login = () => {
           </Box>
           <Typography variant="h5" fontWeight={700}>
             Billing Software
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            Sign in to your account
           </Typography>
         </Box>
 
@@ -92,14 +91,14 @@ const Login = () => {
 
         <Box component="form" onSubmit={handleSubmit}>
           <TextField
-            label="Email"
-            type="email"
+            label="Phone Number"
             fullWidth
             required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            sx={{ mb: 2 }}
-            autoComplete="email"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            sx={{ mb: 3 }}
+            autoComplete="tel"
+            inputProps={{ maxLength: 10 }}
           />
 
           <TextField
@@ -140,28 +139,8 @@ const Login = () => {
               },
             }}
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Logging in..." : "Login"}
           </Button>
-        </Box>
-
-        <Divider sx={{ my: 3 }} />
-
-        {/* Role hint */}
-        <Box sx={{ background: "#f8fafc", borderRadius: 2, p: 2 }}>
-          <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" mb={1}>
-            LOGIN ROLES
-          </Typography>
-          <Box display="flex" justifyContent="space-between">
-            <Box>
-              <Typography variant="caption" color="text.secondary">Admin</Typography>
-              <Typography variant="body2" fontWeight={500}>Full access</Typography>
-            </Box>
-            <Divider orientation="vertical" flexItem sx={{ mx: 2 }} />
-            <Box>
-              <Typography variant="caption" color="text.secondary">Staff</Typography>
-              <Typography variant="body2" fontWeight={500}>Create invoices only</Typography>
-            </Box>
-          </Box>
         </Box>
       </Card>
     </Box>

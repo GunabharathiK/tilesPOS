@@ -11,6 +11,7 @@ const {
 const {
   createPurchase,
   getPurchases,
+  updatePurchase,
   updatePurchasePayment,
   deletePurchase,
 } = require("../controllers/purchaseController");
@@ -20,6 +21,7 @@ const { protect, adminOnly } = require("../middleware/authMiddleware");
 // If these are after /:id, Express treats "purchase" as an :id param
 router.post("/purchase",              protect,            createPurchase);
 router.get("/purchase",               protect,            getPurchases);
+router.put("/purchase/:id",           protect, adminOnly, updatePurchase);
 router.patch("/purchase/:id/payment", protect, adminOnly, updatePurchasePayment);
 router.delete("/purchase/:id",        protect, adminOnly, deletePurchase);
 

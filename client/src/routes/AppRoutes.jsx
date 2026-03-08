@@ -6,12 +6,12 @@ import Invoice         from "../pages/Invoice";
 import InvoicePreview  from "../pages/InvoicePreview";
 import CustomerList    from "../pages/CustomerList";
 import Customers       from "../pages/Customers";
-import BillFormat      from "../components/billing/BillFormat";
+import Settings        from "../pages/Settings";
 import Login           from "../pages/Login";
-import UserManagement  from "../pages/UserManagement";
 
 import SupplierPayment    from "../components/supplier/SupplierPayment";
 import SupplierManagement from "../pages/SupplierManagement";
+import SupplierProductDetails from "../pages/SupplierProductDetails";
 import SupplierCreate     from "../components/supplier/SupplierCreate";
 import SupplierProducts   from "../components/supplier/SupplierProduct";
 
@@ -56,15 +56,16 @@ const AppRoutes = () => {
           <Route path="customers/create"   element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/bill"     element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/payments" element={<AdminRoute><Customers /></AdminRoute>} />
+          <Route path="bill-format"        element={<AdminRoute><Navigate to="/settings" replace /></AdminRoute>} />
 
           {/* Admin only */}
           <Route path="CustomerList" element={<AdminRoute><CustomerList /></AdminRoute>} />
-          <Route path="bill-format"  element={<AdminRoute><BillFormat /></AdminRoute>} />
-          <Route path="users"        element={<AdminRoute><UserManagement /></AdminRoute>} />
+          <Route path="settings"     element={<AdminRoute><Settings /></AdminRoute>} />
 
           {/* Supplier routes */}
           <Route path="suppliers"          element={<SupplierManagement />} />
           <Route path="suppliers/create"   element={<SupplierCreateWrapper  />} />
+          <Route path="suppliers/details"  element={<SupplierProductDetails />} />
           <Route path="suppliers/products" element={<SupplierProductWrapper />} />
           <Route path="suppliers/payment"  element={<SupplierPaymentWrapper />} />
         </Route>

@@ -1,7 +1,7 @@
 import API from "./api";
 
-export const loginUser = (email, password) =>
-  API.post("/auth/login", { email, password });
+export const loginUser = (phone, password) =>
+  API.post("/auth/login", { phone, password });
 
 export const registerUser = (data) =>
   API.post("/auth/register", data);

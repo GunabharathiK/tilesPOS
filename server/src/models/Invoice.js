@@ -6,12 +6,9 @@ const invoiceSchema = new mongoose.Schema(
       name: { type: String, default: "" },
       phone: { type: String, default: "" },
       address: { type: String, default: "" },
-      accountNo: { type: String, default: "" },
-      ifscCode: { type: String, default: "" },
-      upiId: { type: String, default: "" },
-      accountHolder: { type: String, default: "" },
-      bankName: { type: String, default: "" },
-      branch: { type: String, default: "" },
+      gstin: { type: String, default: "" },
+      customerType: { type: String, default: "Retail Customer" },
+      saleType: { type: String, default: "Retail Customer" },
     },
 
     items: [
@@ -54,6 +51,8 @@ const invoiceSchema = new mongoose.Schema(
 
     invoiceNo: String,
     date: String,
+    customerType: { type: String, default: "Retail Customer" },
+    saleType: { type: String, default: "Retail Customer" },
   },
   { timestamps: true }
 );

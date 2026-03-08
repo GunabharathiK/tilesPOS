@@ -3,8 +3,8 @@ import Sidebar from "./Sidebar";
 import { Outlet, useLocation } from "react-router-dom";
 import { useState } from "react";
 
-const SIDEBAR_WIDTH = 240;
-const COLLAPSED_SIDEBAR_WIDTH = 56;
+const SIDEBAR_WIDTH = 208;
+const COLLAPSED_SIDEBAR_WIDTH = 52;
 
 const Layout = () => {
   const location = useLocation();
@@ -21,7 +21,7 @@ const Layout = () => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: 0,
           background: "#f8fafc",
           minHeight: "100vh",
           width: sidebarOpen

@@ -1,615 +1,651 @@
+import { useEffect, useMemo, useState } from "react";
+import { Box, Typography } from "@mui/material";
+import { useLocation } from "react-router-dom";
 import {
-  Box, Card, Typography, TextField, Button, Grid, Divider,
-  IconButton, Chip, Table, TableHead, TableBody,
-  TableRow, TableCell, Tabs, Tab,
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Menu, MenuItem, Collapse, Avatar,
-} from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon   from "@mui/icons-material/KeyboardArrowUp";
-import DeleteIcon         from "@mui/icons-material/Delete";
-import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
-import CreditCardIcon     from "@mui/icons-material/CreditCard";
-import PhoneAndroidIcon   from "@mui/icons-material/PhoneAndroid";
-import MoneyIcon          from "@mui/icons-material/Money";
-import BusinessIcon       from "@mui/icons-material/Business";
-import PersonIcon         from "@mui/icons-material/Person";
-import FileDownloadIcon   from "@mui/icons-material/FileDownload";
-import PictureAsPdfIcon   from "@mui/icons-material/PictureAsPdf";
-import TableChartIcon     from "@mui/icons-material/TableChart";
-import DescriptionIcon    from "@mui/icons-material/Description";
-import ImageIcon          from "@mui/icons-material/Image";
-import CheckCircleIcon    from "@mui/icons-material/CheckCircle";
-import { useEffect, useState, useRef } from "react";
-import { useLocation, useNavigate }    from "react-router-dom";
-import {
-  getSuppliers, getPurchases,
-  updatePurchasePayment, deletePurchase,
+  getSuppliers,
+  getPurchases,
+  updatePurchasePayment,
 } from "../../services/supplierService";
 import toast from "react-hot-toast";
 
-const fmt     = (n = 0) => Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 });
-const fmtDate = (d)     => d ? new Date(d).toLocaleDateString("en-IN") : "—";
-const listColorDesigns = (purchase) => {
-  const vals = [...new Set((purchase?.products || []).map((x) => (x?.colorDesign || "").trim()).filter(Boolean))];
-  return vals.length ? vals.join(", ") : "—";
+const T = {
+  primary: "#1a56a0",
+  primaryDark: "#0f3d7a",
+  primaryLight: "#e8f0fb",
+  success: "#1a7a4a",
+  successLight: "#e8f5ee",
+  danger: "#c0392b",
+  dark: "#1c2333",
+  text: "#2d3748",
+  muted: "#718096",
+  border: "#e2e8f0",
+  bg: "#f0f4f8",
+  white: "#fff",
+};
+
+const inp = (extra = {}) => ({
+  padding: "9px 12px",
+  border: `1.5px solid ${T.border}`,
+  borderRadius: "6px",
+  fontFamily: "'Noto Sans', sans-serif",
+  fontSize: 13,
+  color: T.text,
+  background: T.white,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+  transition: "border-color .15s, box-shadow .15s",
+  ...extra,
+});
+
+const onFocus = (e) => {
+  e.target.style.borderColor = T.primary;
+  e.target.style.boxShadow = "0 0 0 3px rgba(26,86,160,.08)";
+};
+
+const onBlur = (e) => {
+  e.target.style.borderColor = T.border;
+  e.target.style.boxShadow = "none";
+};
+
+const Lbl = ({ children, req }) => (
+  <Box
+    component="label"
+    sx={{
+      display: "block",
+      fontSize: 11,
+      fontWeight: 700,
+      color: T.muted,
+      textTransform: "uppercase",
+      letterSpacing: ".6px",
+      mb: "6px",
+      fontFamily: "'Noto Sans', sans-serif",
+    }}
+  >
+    {children}
+    {req && <Box component="span" sx={{ color: T.danger }}> *</Box>}
+  </Box>
+);
+
+const genSPAY = () => `SPAY-${String(Math.floor(Math.random() * 9000) + 1000).padStart(4, "0")}`;
+const todayStr = () => new Date().toISOString().split("T")[0];
+const fmt = (n = 0) => Number(n).toLocaleString("en-IN");
+const fmtDate = (d) => {
+  if (!d) return "";
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime())
+    ? d
+    : `${String(dt.getDate()).padStart(2, "0")}-${String(dt.getMonth() + 1).padStart(2, "0")}-${dt.getFullYear()}`;
 };
 
 const PAYMENT_MODES = [
-  { label: "Cash",        icon: <MoneyIcon />,         color: "#059669" },
-  { label: "Card",        icon: <CreditCardIcon />,     color: "#2563eb" },
-  { label: "UPI",         icon: <PhoneAndroidIcon />,   color: "#7c3aed" },
-  { label: "Net Banking", icon: <AccountBalanceIcon />, color: "#d97706" },
+  "Cash",
+  "NEFT / Online Transfer",
+  "Cheque",
+  "UPI",
+  "Card",
 ];
 
-const buildExportData = (purchase, supplier) => ({
-  "Invoice No":    purchase.invoiceNo || "",
-  "Invoice Date":  fmtDate(purchase.invoiceDate),
-  "Company":       supplier?.companyName || supplier?.name || purchase.supplierName || "",
-  "Phone":         supplier?.companyPhone || supplier?.phone || "",
-  "Grand Total":   `Rs.${fmt(purchase.grandTotal)}`,
-  "Final Payable": `Rs.${fmt(purchase.finalPayable || purchase.grandTotal)}`,
-  "Total Paid":    `Rs.${fmt(purchase.totalPaid)}`,
-  "Amount Due":    `Rs.${fmt(purchase.totalDue)}`,
-  "Status":        purchase.paymentStatus || "",
-});
-const exportToPDF = (data, name) => {
-  const rows = Object.entries(data).map(([k, v]) =>
-    `<tr><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;color:#64748b;width:45%">${k}</td><td style="padding:6px 12px;border-bottom:1px solid #e2e8f0">${v}</td></tr>`).join("");
-  const w = window.open("", "_blank");
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${name}</title><style>body{font-family:Arial,sans-serif;padding:32px}h2{color:#1d4ed8}table{width:100%;border-collapse:collapse;border:1px solid #e2e8f0}</style></head><body><h2>Payment - ${name}</h2><table>${rows}</table></body></html>`);
-  w.document.close(); w.onload = () => { w.print(); w.close(); };
-};
-const exportToExcel = (data, name) => {
-  const rows = Object.entries(data).map(([k, v]) => `<tr><td><b>${k}</b></td><td>${v}</td></tr>`).join("");
-  const blob = new Blob([`<html><body><table>${rows}</table></body></html>`], { type: "application/vnd.ms-excel" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}.xls`; a.click();
-};
-const exportToWord = (data, name) => {
-  const rows = Object.entries(data).map(([k, v]) => `<p><b>${k}:</b> ${v}</p>`).join("");
-  const blob = new Blob([`<html><body>${rows}</body></html>`], { type: "application/msword" });
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `${name}.doc`; a.click();
-};
-const exportToImage = async (data, name) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 600; canvas.height = 60 + Object.keys(data).length * 36 + 40;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#1d4ed8"; ctx.font = "bold 18px Arial"; ctx.fillText(`Payment - ${name}`, 24, 40);
-  Object.entries(data).forEach(([k, v], i) => {
-    const y = 60 + i * 36 + 24;
-    if (i % 2 === 0) { ctx.fillStyle = "#f8fafc"; ctx.fillRect(0, y - 20, canvas.width, 36); }
-    ctx.fillStyle = "#64748b"; ctx.font = "bold 13px Arial"; ctx.fillText(k, 24, y);
-    ctx.fillStyle = "#1e293b"; ctx.font = "13px Arial"; ctx.fillText(String(v), 280, y);
-  });
-  const a = document.createElement("a"); a.download = `${name}.png`; a.href = canvas.toDataURL("image/png"); a.click();
-};
+const normalizePaymentMode = (mode) => (
+  mode === "NEFT / Online Transfer" ? "Net Banking" : mode
+);
 
-const ExportMenu = ({ purchase, supplier }) => {
-  const [anchor, setAnchor] = useState(null);
-  const name = `${supplier?.companyName || purchase.supplierName || "supplier"}_${purchase.invoiceNo || "inv"}`;
-  const data = buildExportData(purchase, supplier);
-  return (
-    <>
-      <Button size="small" variant="outlined" startIcon={<FileDownloadIcon />}
-        onClick={(e) => { e.stopPropagation(); setAnchor(e.currentTarget); }}>Export</Button>
-      <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} PaperProps={{ sx: { borderRadius: 2 } }}>
-        {[
-          { label: "PDF",   icon: <PictureAsPdfIcon fontSize="small" sx={{ color: "#dc2626" }} />, fn: () => exportToPDF(data, name) },
-          { label: "Excel", icon: <TableChartIcon   fontSize="small" sx={{ color: "#15803d" }} />, fn: () => exportToExcel(data, name) },
-          { label: "Word",  icon: <DescriptionIcon  fontSize="small" sx={{ color: "#2563eb" }} />, fn: () => exportToWord(data, name) },
-          { label: "Image", icon: <ImageIcon        fontSize="small" sx={{ color: "#7c3aed" }} />, fn: () => exportToImage(data, name) },
-        ].map((o) => (
-          <MenuItem key={o.label} onClick={() => { o.fn(); setAnchor(null); }} sx={{ gap: 1.5, fontSize: 13 }}>
-            {o.icon} Export as {o.label}
-          </MenuItem>
-        ))}
-      </Menu>
-    </>
+const SupplierPayment = () => {
+  const location = useLocation();
+  const preselectedSupplier = location.state?.supplier || null;
+  const [suppliers, setSuppliers] = useState([]);
+  const [purchases, setPurchases] = useState([]);
+  const [supplierId, setSupplierId] = useState(location.state?.supplierId || "");
+  const [spayNo] = useState(genSPAY);
+  const [payDate, setPayDate] = useState(todayStr());
+  const [amountPaying, setAmountPaying] = useState("");
+  const [paymentMode, setPaymentMode] = useState("NEFT / Online Transfer");
+  const [txnRef, setTxnRef] = useState("");
+  const [selectedGRNs, setSelectedGRNs] = useState([]);
+  const [remarks, setRemarks] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = async () => {
+    const [sRes, pRes] = await Promise.all([getSuppliers(), getPurchases()]);
+    setSuppliers(Array.isArray(sRes.data) ? sRes.data : []);
+    setPurchases(Array.isArray(pRes.data) ? pRes.data : []);
+  };
+
+  useEffect(() => {
+    loadData().catch(() => toast.error("Failed to load data"));
+  }, []);
+
+  const selectedSupplier =
+    suppliers.find((supplier) => supplier._id === supplierId) || preselectedSupplier;
+
+  const livePurchases = useMemo(
+    () => purchases.filter((purchase) => !purchase.isDraft),
+    [purchases]
   );
-};
 
-// ── Payment Dialog ────────────────────────────────────────────
-const PaymentDialog = ({ purchase, supplier, open, onClose, onSaved }) => {
-  const [paymentType,   setPaymentType]   = useState("Full Payment");
-  const [paymentMode,   setPaymentMode]   = useState("Cash");
-  const [partialAmt,    setPartialAmt]    = useState("");
-  const [amtError,      setAmtError]      = useState("");
-  const [discPctInput,  setDiscPctInput]  = useState("");
-  const [gstPctInput,   setGstPctInput]   = useState("");
-  const [confirmedDisc, setConfirmedDisc] = useState(0);
-  const [confirmedGst,  setConfirmedGst]  = useState(0);
-  const [loading,       setLoading]       = useState(false);
-  const [done,          setDone]          = useState(false);
+  const payablePurchases = useMemo(
+    () => livePurchases.filter((p) => Number(p.totalDue || 0) > 0),
+    [livePurchases]
+  );
 
-  const grandTotal  = Number(purchase?.grandTotal || 0);
-  const alreadyPaid = Number(purchase?.totalPaid  ?? 0);
-  const extraDiscAmt = grandTotal * confirmedDisc / 100;
-  const afterDisc    = grandTotal - extraDiscAmt;
-  const extraGstAmt  = afterDisc  * confirmedGst  / 100;
-  const finalPayable = afterDisc  + extraGstAmt;
-  const remaining    = Math.max(0, finalPayable - alreadyPaid);
-  const fullPayAmt   = remaining;
-  const amountToPay  = paymentType === "Full Payment" ? fullPayAmt : paymentType === "Pending" ? 0 : Number(partialAmt) || 0;
+  const supplierPurchases = useMemo(
+    () =>
+      payablePurchases.filter((p) => {
+        const pid = p.supplierId?._id || p.supplierId;
+        return pid === supplierId && p.paymentStatus !== "Paid";
+      }),
+    [payablePurchases, supplierId]
+  );
 
-  useEffect(() => {
-    if (!purchase || !open) return;
-    setPaymentType(purchase.paymentType || "Full Payment");
-    setPaymentMode(purchase.paymentMode || "Cash");
-    setPartialAmt(""); setAmtError("");
-    setDiscPctInput(purchase.extraDiscountPct ? String(purchase.extraDiscountPct) : "");
-    setGstPctInput(purchase.extraGstPct ? String(purchase.extraGstPct) : "");
-    setConfirmedDisc(purchase.extraDiscountPct || 0);
-    setConfirmedGst(purchase.extraGstPct || 0);
-    setDone(false);
-  }, [purchase?._id, open]);
+  const totalOutstanding = supplierPurchases.reduce((sum, purchase) => sum + Number(purchase.totalDue || 0), 0);
 
-  useEffect(() => {
-    if (paymentType !== "Partial") { setAmtError(""); return; }
-    const v = Number(partialAmt) || 0;
-    if (v <= 0) setAmtError("Amount must be greater than 0");
-    else if (v >= fullPayAmt) setAmtError(`Must be less than Rs.${fmt(fullPayAmt)}`);
-    else setAmtError("");
-  }, [partialAmt, paymentType, fullPayAmt]);
+  const supplierSummary = useMemo(
+    () =>
+      suppliers
+        .map((supplier) => {
+          const rows = livePurchases.filter((p) => {
+            const pid = p.supplierId?._id || p.supplierId;
+            return pid === supplier._id;
+          });
+          const due = rows.reduce((sum, row) => sum + Number(row.totalDue || 0), 0);
+          const paid = rows.reduce((sum, row) => sum + Number(row.totalPaid || 0), 0);
+          return { ...supplier, due, paid, cleared: due <= 0 && paid > 0 };
+        })
+        .sort((a, b) => b.due - a.due),
+    [livePurchases, suppliers]
+  );
 
-  const handleConfirmDiscGst = () => {
-    setConfirmedDisc(Math.min(100, Math.max(0, Number(discPctInput) || 0)));
-    setConfirmedGst(Math.min(100,  Math.max(0, Number(gstPctInput)  || 0)));
-    toast.success("GST & Discount applied");
+  const activeTargets = selectedGRNs.length > 0
+    ? supplierPurchases.filter((purchase) => selectedGRNs.includes(purchase._id))
+    : supplierPurchases;
+
+  const activeTargetDue = activeTargets.reduce((sum, purchase) => sum + Number(purchase.totalDue || 0), 0);
+
+  const toggleGRN = (id) => {
+    setSelectedGRNs((prev) => (
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    ));
   };
 
-  const handleDone = async () => {
-    if (done) return;
-    if (paymentType === "Partial" && (amtError || !partialAmt)) { toast.error(amtError || "Enter partial amount"); return; }
-    const paying = paymentType === "Pending" ? 0 : paymentType === "Full Payment" ? remaining : Number(partialAmt);
-    const newTotalPaid = alreadyPaid + paying;
-    const newStatus = paymentType === "Pending" ? "Pending" : newTotalPaid >= finalPayable ? "Paid" : "Partial";
-    setLoading(true); setDone(true);
+  const quickSet = (value) => {
+    const max = activeTargetDue || totalOutstanding;
+    setAmountPaying(String(max > 0 ? Math.min(value, max) : value));
+  };
+
+  const resetForm = () => {
+    setSupplierId(location.state?.supplierId || "");
+    setAmountPaying("");
+    setPaymentMode("NEFT / Online Transfer");
+    setTxnRef("");
+    setSelectedGRNs([]);
+    setRemarks("");
+    setPayDate(todayStr());
+  };
+
+  const handleRecord = async () => {
+    if (!supplierId) {
+      toast.error("Please select a supplier");
+      return;
+    }
+    if (!amountPaying || Number(amountPaying) <= 0) {
+      toast.error("Enter a valid amount to pay");
+      return;
+    }
+    if (!paymentMode) {
+      toast.error("Select a payment mode");
+      return;
+    }
+    if (activeTargets.length === 0) {
+      toast.error("No pending invoices available for payment");
+      return;
+    }
+    if (Number(amountPaying) > activeTargetDue) {
+      toast.error(`Amount exceeds selected due of Rs.${fmt(activeTargetDue)}`);
+      return;
+    }
+
+    setSaving(true);
     try {
-      await updatePurchasePayment(purchase._id, {
-        totalPaid: newTotalPaid, paymentStatus: newStatus,
-        paymentMode: paymentType === "Pending" ? "" : paymentMode, paymentType,
-        extraDiscountPct: confirmedDisc, extraDiscountAmt: extraDiscAmt,
-        extraGstPct: confirmedGst, extraGstAmt, finalPayable,
-      });
-      toast.success("Payment saved");
-      onSaved(); onClose();
-    } catch { toast.error("Failed to save payment"); setDone(false); }
-    finally { setLoading(false); }
+      let remaining = Number(amountPaying);
+
+      for (const purchase of activeTargets) {
+        if (remaining <= 0) break;
+
+        const due = Number(purchase.totalDue || 0);
+        const paying = Math.min(remaining, due);
+        const payable = Number(purchase.finalPayable || purchase.grandTotal || purchase.totalInvoiceAmount || 0);
+        const newPaid = Number(purchase.totalPaid || 0) + paying;
+        remaining -= paying;
+
+        await updatePurchasePayment(purchase._id, {
+          totalPaid: newPaid,
+          finalPayable: payable,
+          paymentMode: normalizePaymentMode(paymentMode),
+          paymentType: newPaid >= payable ? "Full Payment" : "Partial",
+          paymentDate: payDate,
+          referenceNo: txnRef,
+          remarks,
+        });
+      }
+
+      toast.success("Payment recorded successfully");
+      await loadData();
+      resetForm();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Payment failed");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  if (!purchase) return null;
+  const handleAdvice = () => {
+    const supplier = suppliers.find((item) => item._id === supplierId);
+    if (!supplier) {
+      toast.error("Select a supplier first");
+      return;
+    }
+
+    const lines = activeTargets
+      .map((purchase) => `${purchase.grnNo || purchase.invoiceNo} - Rs.${fmt(purchase.totalDue || 0)}`)
+      .join(", ");
+
+    const popup = window.open("", "_blank");
+    if (!popup) return;
+
+    popup.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Payment Advice</title><style>body{font-family:Arial,sans-serif;padding:28px;color:#1f2937}h2{color:#1a56a0;margin:0 0 16px}.row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #e5e7eb}.muted{color:#64748b}.amt{font-weight:700;color:#15803d}</style></head><body><h2>Payment Advice</h2><div class="row"><span class="muted">Supplier</span><span>${supplier.companyName || supplier.name}</span></div><div class="row"><span class="muted">Payment Date</span><span>${fmtDate(payDate)}</span></div><div class="row"><span class="muted">Payment Mode</span><span>${paymentMode}</span></div><div class="row"><span class="muted">Reference No.</span><span>${txnRef || "-"}</span></div><div class="row"><span class="muted">Against Invoice(s)</span><span>${lines || "-"}</span></div><div class="row"><span class="muted">Remarks</span><span>${remarks || "-"}</span></div><div class="row"><span class="muted">Amount Paying</span><span class="amt">Rs.${fmt(amountPaying || 0)}</span></div></body></html>`);
+    popup.document.close();
+    popup.focus();
+  };
+
+  const selStyle = { ...inp(), cursor: "pointer", appearance: "auto" };
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-      <DialogTitle sx={{ pb: 1, borderBottom: "1px solid #e2e8f0" }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Box>
-            <Typography fontWeight={700} fontSize={20}>Payment — Invoice #{purchase.invoiceNo}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              {supplier?.companyName || purchase.supplierName} · {fmtDate(purchase.invoiceDate)}
+    <Box sx={{ fontFamily: "'Noto Sans', sans-serif", background: T.bg, minHeight: "100vh", p: 3 }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 2, alignItems: "start" }}>
+        <Box
+          sx={{
+            background: T.white,
+            borderRadius: "10px",
+            border: `1px solid ${T.border}`,
+            boxShadow: "0 1px 4px rgba(0,0,0,.05)",
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              px: 2.5,
+              py: 1.8,
+              borderBottom: `1px solid ${T.border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark, display: "flex", alignItems: "center", gap: 1 }}>
+              <Box component="span" sx={{ fontSize: 16 }}>Pay</Box>
+              Pay to Supplier
+            </Typography>
+            <Box sx={{ fontFamily: "'DM Mono', monospace", fontSize: 13, fontWeight: 700, color: T.primary, letterSpacing: "1px" }}>
+              {spayNo}
+            </Box>
+          </Box>
+
+          <Box sx={{ p: 2.5, display: "flex", flexDirection: "column", gap: "18px" }}>
+            {selectedSupplier && (
+              <Box sx={{ p: 2, border: `1px solid ${T.border}`, borderRadius: "8px", background: "#fafbfc", display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 2 }}>
+                <Box>
+                  <Typography sx={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: 0.4 }}>
+                    Supplier
+                  </Typography>
+                  <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark }}>
+                    {selectedSupplier.companyName || selectedSupplier.name}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: 0.4 }}>
+                    Contact
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: T.text }}>
+                    {selectedSupplier.companyPhone || selectedSupplier.phone || "-"}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: 0.4 }}>
+                    Bank
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: T.text }}>
+                    {selectedSupplier.bankName || "-"}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography sx={{ fontSize: 11, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: 0.4 }}>
+                    Recommended Ref
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: T.text }}>
+                    {selectedSupplier.accountNo ? `A/C ${selectedSupplier.accountNo}` : selectedSupplier.upiId || "-"}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <Box>
+                <Lbl req>Select Supplier</Lbl>
+                <select
+                  style={selStyle}
+                  value={supplierId}
+                  onChange={(e) => {
+                    setSupplierId(e.target.value);
+                    setSelectedGRNs([]);
+                    setAmountPaying("");
+                  }}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                >
+                  <option value="">Select Supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier._id} value={supplier._id}>
+                      {supplier.companyName || supplier.name}
+                    </option>
+                  ))}
+                </select>
+              </Box>
+              <Box>
+                <Lbl>Payment Date</Lbl>
+                <input
+                  type="date"
+                  style={inp()}
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <Box>
+                <Lbl>Total Outstanding (Rs)</Lbl>
+                <Box
+                  sx={{
+                    ...inp(),
+                    background: "#f0f4f8",
+                    cursor: "default",
+                    display: "flex",
+                    alignItems: "center",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    fontSize: 15,
+                    color: totalOutstanding > 0 ? T.danger : T.success,
+                  }}
+                >
+                  {supplierId ? `Rs.${fmt(totalOutstanding)}` : <Box sx={{ color: T.muted, fontSize: 13, fontWeight: 400 }}>Select a supplier</Box>}
+                </Box>
+              </Box>
+
+              <Box>
+                <Lbl req>Amount Paying (Rs)</Lbl>
+                <input
+                  type="number"
+                  min={0}
+                  style={inp()}
+                  placeholder="0"
+                  value={amountPaying}
+                  onChange={(e) => setAmountPaying(e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                />
+
+                <Box sx={{ display: "flex", gap: 0.8, mt: 1, flexWrap: "wrap" }}>
+                  {[
+                    { label: "10K", val: 10000 },
+                    { label: "50K", val: 50000 },
+                    { label: "1L", val: 100000 },
+                    { label: "2L", val: 200000 },
+                    { label: "Full", val: activeTargetDue || totalOutstanding },
+                  ].map(({ label, val }) => (
+                    <Box
+                      key={label}
+                      onClick={() => quickSet(val)}
+                      sx={{
+                        px: 1.4,
+                        py: 0.4,
+                        borderRadius: "5px",
+                        cursor: "pointer",
+                        border: `1.5px solid ${T.border}`,
+                        background: T.white,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: T.text,
+                        fontFamily: "'Noto Sans', sans-serif",
+                        "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight },
+                        transition: "all .13s",
+                      }}
+                    >
+                      {label}
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <Box>
+                <Lbl req>Payment Mode</Lbl>
+                <select
+                  style={selStyle}
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                >
+                  {PAYMENT_MODES.map((mode) => <option key={mode}>{mode}</option>)}
+                </select>
+              </Box>
+              <Box>
+                <Lbl>Transaction / Cheque Ref No.</Lbl>
+                <input
+                  style={inp()}
+                  placeholder="UTR no. / Cheque no."
+                  value={txnRef}
+                  onChange={(e) => setTxnRef(e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+              <Box>
+                <Lbl>Against Invoice(s)</Lbl>
+                {supplierPurchases.length > 0 ? (
+                  <Box sx={{ border: `1.5px solid ${T.border}`, borderRadius: "6px", overflow: "hidden", background: T.white }}>
+                    {supplierPurchases.map((purchase, index) => {
+                      const isSelected = selectedGRNs.includes(purchase._id);
+                      return (
+                        <Box
+                          key={purchase._id}
+                          onClick={() => toggleGRN(purchase._id)}
+                          sx={{
+                            px: 1.5,
+                            py: 1,
+                            background: isSelected ? "#dbeafe" : index % 2 === 0 ? T.white : "#fafbfc",
+                            cursor: "pointer",
+                            borderBottom: index < supplierPurchases.length - 1 ? `1px solid ${T.border}` : "none",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            "&:hover": { background: isSelected ? "#bfdbfe" : T.primaryLight },
+                            transition: "background .13s",
+                          }}
+                        >
+                          <Typography sx={{ fontSize: 13, fontFamily: "'DM Mono', monospace", color: T.dark }}>
+                            {purchase.grnNo || purchase.invoiceNo}
+                          </Typography>
+                          <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.danger, fontFamily: "'Rajdhani', sans-serif" }}>
+                            Rs.{fmt(purchase.totalDue)}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                ) : (
+                  <Box sx={{ ...inp(), background: "#f8fafc", color: T.muted, display: "flex", alignItems: "center", minHeight: 80, justifyContent: "center", fontSize: 12 }}>
+                    {supplierId ? "No pending invoices" : "Select a supplier first"}
+                  </Box>
+                )}
+                {selectedGRNs.length > 0 && (
+                  <Box sx={{ fontSize: 11, color: T.muted, mt: 0.5 }}>
+                    {selectedGRNs.length} invoice{selectedGRNs.length > 1 ? "s" : ""} selected
+                  </Box>
+                )}
+              </Box>
+
+              <Box>
+                <Lbl>Remarks</Lbl>
+                <textarea
+                  style={{ ...inp(), minHeight: 100, resize: "vertical", fontFamily: "'Noto Sans', sans-serif" }}
+                  placeholder={`e.g. Part payment for ${supplierPurchases[0]?.grnNo || "GRN-2026-0016"}`}
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  onFocus={onFocus}
+                  onBlur={onBlur}
+                />
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", gap: 1.2, pt: 0.5 }}>
+              <Box
+                onClick={() => !saving && handleRecord()}
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  px: 2.5,
+                  py: 1.2,
+                  borderRadius: "7px",
+                  cursor: saving ? "default" : "pointer",
+                  background: T.success,
+                  color: "#fff",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontFamily: "'Noto Sans', sans-serif",
+                  opacity: saving ? 0.75 : 1,
+                  "&:hover": !saving ? { background: "#146038", boxShadow: "0 4px 12px rgba(26,122,74,.3)" } : {},
+                  transition: "all .17s",
+                }}
+              >
+                {saving ? "Recording..." : "Record Payment"}
+              </Box>
+
+              <Box
+                onClick={handleAdvice}
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "7px",
+                  px: 2,
+                  py: 1.2,
+                  borderRadius: "7px",
+                  cursor: "pointer",
+                  background: T.white,
+                  color: T.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  border: `1.5px solid ${T.border}`,
+                  fontFamily: "'Noto Sans', sans-serif",
+                  "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight },
+                  transition: "all .17s",
+                }}
+              >
+                Payment Advice
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            background: T.white,
+            borderRadius: "10px",
+            border: `1px solid ${T.border}`,
+            boxShadow: "0 1px 4px rgba(0,0,0,.05)",
+            overflow: "hidden",
+          }}
+        >
+          <Box sx={{ px: 2.5, py: 1.8, borderBottom: `1px solid ${T.border}` }}>
+            <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark }}>
+              Supplier Payable Summary
             </Typography>
           </Box>
-          <ExportMenu purchase={purchase} supplier={supplier} />
-        </Box>
-      </DialogTitle>
-      <DialogContent sx={{ p: 0 }}>
-        <Box sx={{ display: "flex", overflowX: "auto", minHeight: 420 }}>
-          {/* COL 1 */}
-          <Box sx={{ minWidth: 210, p: 2, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {supplier && (<>
-              <Box sx={{ background: "#f8fafc", borderRadius: 2, p: 1.5, border: "1px solid #e2e8f0" }}>
-                <Box display="flex" alignItems="center" gap={0.8} mb={1}>
-                  <BusinessIcon sx={{ fontSize: 13, color: "#2563eb" }} />
-                  <Typography fontSize={10} fontWeight={700} color="text.secondary">COMPANY</Typography>
-                </Box>
-                {[["Company",supplier.companyName||supplier.name],["Phone",supplier.companyPhone||supplier.phone],["Email",supplier.companyEmail],["GSTIN",supplier.gstin],["Address",supplier.companyAddress||supplier.address]].filter(([,v])=>v).map(([k,v])=>(
-                  <Box key={k} display="flex" gap={1} mb={0.4}><Typography fontSize={10} color="text.secondary" minWidth={50}>{k}:</Typography><Typography fontSize={11} fontWeight={500} sx={{ wordBreak:"break-word" }}>{v}</Typography></Box>
-                ))}
+
+          <Box sx={{ p: 0 }}>
+            {supplierSummary.length === 0 ? (
+              <Box sx={{ p: 3, textAlign: "center", color: T.muted, fontSize: 13 }}>
+                No suppliers found
               </Box>
-              <Box sx={{ background: "#f8fafc", borderRadius: 2, p: 1.5, border: "1px solid #e2e8f0" }}>
-                <Box display="flex" alignItems="center" gap={0.8} mb={1}>
-                  <PersonIcon sx={{ fontSize: 13, color: "#7c3aed" }} />
-                  <Typography fontSize={10} fontWeight={700} color="text.secondary">SUPPLIER</Typography>
-                </Box>
-                {[
-                  ["Name",  supplier.supplierName || (supplier.name !== supplier.companyName ? supplier.name : null)],
-                  ["Phone", supplier.supplierPhone || null],
-                ].filter(([,v])=>v).map(([k,v])=>(
-                  <Box key={k} display="flex" gap={1} mb={0.4}><Typography fontSize={10} color="text.secondary" minWidth={40}>{k}:</Typography><Typography fontSize={11} fontWeight={500}>{v}</Typography></Box>
-                ))}
-              </Box>
-              {(supplier.accountNo||supplier.upiId) && (
-                <Box sx={{ background: "#f8fafc", borderRadius: 2, p: 1.5, border: "1px solid #e2e8f0" }}>
-                  <Box display="flex" alignItems="center" gap={0.8} mb={1}>
-                    <AccountBalanceIcon sx={{ fontSize: 13, color: "#d97706" }} />
-                    <Typography fontSize={10} fontWeight={700} color="text.secondary">BANK</Typography>
+            ) : (
+              supplierSummary.map((supplier, index) => {
+                const isActive = supplier._id === supplierId;
+                const cleared = supplier.due <= 0 && supplier.paid > 0;
+                const loc = [supplier.city, supplier.state].filter(Boolean).join(", ");
+                const terms = supplier.paymentTerms || "30 days";
+
+                return (
+                  <Box
+                    key={supplier._id}
+                    onClick={() => {
+                      setSupplierId(supplier._id);
+                      setSelectedGRNs([]);
+                      setAmountPaying("");
+                    }}
+                    sx={{
+                      px: 2.5,
+                      py: 1.8,
+                      borderBottom: index < supplierSummary.length - 1 ? `1px solid ${T.border}` : "none",
+                      cursor: "pointer",
+                      background: isActive ? T.primaryLight : T.white,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      justifyContent: "space-between",
+                      "&:hover": { background: isActive ? T.primaryLight : "#f8fafc" },
+                      transition: "background .13s",
+                    }}
+                  >
+                    <Box>
+                      <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark, fontFamily: "'Noto Sans', sans-serif" }}>
+                        {supplier.companyName || supplier.name}
+                      </Typography>
+                      <Typography sx={{ fontSize: 12, color: T.muted, mt: 0.3 }}>
+                        {loc && `${loc} · `}Terms: {terms}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ textAlign: "right", flexShrink: 0, ml: 2 }}>
+                      <Typography sx={{ fontSize: 15, fontWeight: 800, fontFamily: "'Rajdhani', sans-serif", color: cleared ? T.success : supplier.due > 0 ? T.danger : T.muted }}>
+                        Rs.{fmt(supplier.due)}
+                      </Typography>
+                      <Typography sx={{ fontSize: 11, fontWeight: 600, color: cleared ? T.success : supplier.due > 0 ? T.danger : T.muted, mt: 0.2 }}>
+                        {cleared ? "Cleared" : supplier.due > 0 ? "Due" : "-"}
+                      </Typography>
+                    </Box>
                   </Box>
-                  {[["A/C",supplier.accountNo],["IFSC",supplier.ifscCode],["UPI",supplier.upiId],["Bank",supplier.bankName],["Branch",supplier.branch],["Holder",supplier.accountHolder]].filter(([,v])=>v).map(([k,v])=>(
-                    <Box key={k} display="flex" gap={1} mb={0.4}><Typography fontSize={10} color="text.secondary" minWidth={44}>{k}:</Typography><Typography fontSize={11} fontWeight={500} sx={{ wordBreak:"break-word" }}>{v}</Typography></Box>
-                  ))}
-                </Box>
-              )}
-            </>)}
-          </Box>
-          {/* COL 2 */}
-          <Box sx={{ minWidth: 280, p: 2, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 1.5 }}>
-            <Box sx={{ background: "#eff6ff", borderRadius: 2, p: 2, border: "1px solid #bfdbfe" }}>
-              <Typography fontSize={11} fontWeight={700} color="#1d4ed8" mb={1.5}>PURCHASE SUMMARY</Typography>
-              {[{label:"Subtotal",val:purchase.subtotal,color:"text.primary",sign:""},{label:"Item Discount",val:purchase.totalDiscount,color:"#dc2626",sign:"- "},{label:"Item GST",val:purchase.totalGst,color:"#d97706",sign:"+ "},{label:"Additional",val:purchase.additionalTotal,color:"#7c3aed",sign:"+ "}].map(({label,val,color,sign})=>(
-                <Box key={label} display="flex" justifyContent="space-between" mb={0.8}><Typography fontSize={12} color="text.secondary">{label}</Typography><Typography fontSize={12} fontWeight={600} color={color}>{sign}Rs.{fmt(val)}</Typography></Box>
-              ))}
-              <Divider sx={{ my: 1 }} />
-              <Box display="flex" justifyContent="space-between">
-                <Typography fontWeight={700} fontSize={13}>Grand Total</Typography>
-                <Typography fontWeight={800} color="#1d4ed8" fontSize={15}>Rs.{fmt(grandTotal)}</Typography>
-              </Box>
-            </Box>
-            <Box sx={{ background: "#fafafa", borderRadius: 2, p: 2, border: "1px solid #e2e8f0" }}>
-              <Typography fontSize={11} fontWeight={700} color="text.secondary" mb={1.5}>EXTRA GST & DISCOUNT</Typography>
-              <TextField fullWidth size="small" label="Discount %" type="number" value={discPctInput}
-                inputProps={{ min:0, max:100, step:0.1 }}
-                InputProps={{ endAdornment: <Typography fontSize={12} color="text.secondary">%</Typography> }}
-                onChange={(e) => setDiscPctInput(e.target.value)} sx={{ mb: 1.5 }} />
-              <TextField fullWidth size="small" label="GST %" type="number" value={gstPctInput}
-                inputProps={{ min:0, max:100, step:0.1 }}
-                InputProps={{ endAdornment: <Typography fontSize={12} color="text.secondary">%</Typography> }}
-                onChange={(e) => setGstPctInput(e.target.value)} sx={{ mb: 1.5 }} />
-              <Button fullWidth variant="contained" size="small" startIcon={<CheckCircleIcon />}
-                onClick={handleConfirmDiscGst} sx={{ background: "#1d4ed8", fontWeight: 700, mb: 1.5 }}>
-                Confirm GST & Discount
-              </Button>
-              {(confirmedDisc > 0 || confirmedGst > 0) && (
-                <Box sx={{ p: 1.2, background: "#fff", borderRadius: 1.5, border: "1px solid #e2e8f0" }}>
-                  <Box display="flex" justifyContent="space-between" mb={0.5}><Typography fontSize={11} color="text.secondary">Grand Total</Typography><Typography fontSize={11} fontWeight={600}>Rs.{fmt(grandTotal)}</Typography></Box>
-                  {confirmedDisc > 0 && <Box display="flex" justifyContent="space-between" mb={0.5}><Typography fontSize={11} color="#dc2626">Discount ({confirmedDisc}%)</Typography><Typography fontSize={11} fontWeight={600} color="#dc2626">- Rs.{fmt(extraDiscAmt)}</Typography></Box>}
-                  {confirmedGst  > 0 && <Box display="flex" justifyContent="space-between" mb={0.5}><Typography fontSize={11} color="#d97706">GST ({confirmedGst}%)</Typography><Typography fontSize={11} fontWeight={600} color="#d97706">+ Rs.{fmt(extraGstAmt)}</Typography></Box>}
-                  <Divider sx={{ my: 0.5 }} />
-                  <Box display="flex" justifyContent="space-between"><Typography fontSize={11} fontWeight={700}>Final Payable</Typography><Typography fontSize={13} fontWeight={800} color="#1d4ed8">Rs.{fmt(finalPayable)}</Typography></Box>
-                </Box>
-              )}
-            </Box>
-            {[{label:"Final Payable",val:finalPayable,color:"#1d4ed8",bg:"#eff6ff"},{label:"Already Paid",val:alreadyPaid,color:"#15803d",bg:"#ecfdf5"},{label:"Remaining Due",val:remaining,color:"#dc2626",bg:"#fef2f2"}].map(({label,val,color,bg})=>(
-              <Box key={label} sx={{ background:bg, borderRadius:2, p:1.2, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <Typography fontSize={11} color="text.secondary">{label}</Typography>
-                <Typography fontWeight={700} color={color} fontSize={13}>Rs.{fmt(val)}</Typography>
-              </Box>
-            ))}
-          </Box>
-          {/* COL 3 */}
-          <Box sx={{ flex: 1, minWidth: 280, p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-            <Box>
-              <Typography fontSize={11} fontWeight={700} color="text.secondary" mb={1}>PAYMENT TYPE *</Typography>
-              <Box display="flex" gap={1}>
-                {[{t:"Full Payment",sub:`Rs.${fmt(fullPayAmt)}`,subColor:"#15803d"},{t:"Partial",sub:"custom",subColor:"#d97706"},{t:"Pending",sub:"Rs.0",subColor:"#dc2626"}].map(({t,sub,subColor})=>(
-                  <Box key={t} onClick={()=>setPaymentType(t)} sx={{ flex:1, textAlign:"center", py:1.2, px:0.5, borderRadius:2, cursor:"pointer", border:"2px solid", borderColor:paymentType===t?"#1d4ed8":"#e2e8f0", background:paymentType===t?"#eff6ff":"#fff", transition:"all 0.15s" }}>
-                    <Typography fontSize={12} fontWeight={600} color={paymentType===t?"#1d4ed8":"text.secondary"}>{t}</Typography>
-                    <Typography fontSize={11} fontWeight={500} color={subColor}>{sub}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-            {paymentType === "Partial" && (
-              <TextField fullWidth size="small" label="Amount to Pay" type="number" value={partialAmt} error={!!amtError}
-                helperText={amtError || `Between Rs.1 and Rs.${fmt(fullPayAmt - 1)}`}
-                inputProps={{ min: 1 }} onChange={(e) => setPartialAmt(e.target.value)} />
-            )}
-            {paymentType !== "Pending" && (
-              <Box sx={{ background:"#ecfdf5", borderRadius:2, p:2, border:"1px solid #bbf7d0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                <Typography fontWeight={600} color="#15803d">Amount to Pay Now</Typography>
-                <Typography fontWeight={800} fontSize={18} color="#15803d">Rs.{fmt(amountToPay)}</Typography>
-              </Box>
-            )}
-            {paymentType !== "Pending" && (
-              <Box>
-                <Typography fontSize={11} fontWeight={700} color="text.secondary" mb={1}>PAYMENT MODE *</Typography>
-                <Grid container spacing={1}>
-                  {PAYMENT_MODES.map((m) => (
-                    <Grid item xs={6} key={m.label}>
-                      <Box onClick={()=>setPaymentMode(m.label)} sx={{ border:`2px solid ${paymentMode===m.label?m.color:"#e2e8f0"}`, borderRadius:2, p:1.2, cursor:"pointer", display:"flex", alignItems:"center", gap:1, background:paymentMode===m.label?`${m.color}15`:"#fff", transition:"all 0.15s" }}>
-                        <Box sx={{ color:m.color, "& svg":{ fontSize:18 } }}>{m.icon}</Box>
-                        <Typography fontSize={12} fontWeight={600} color={paymentMode===m.label?m.color:"text.secondary"}>{m.label}</Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Box>
+                );
+              })
             )}
           </Box>
+
+          {supplierSummary.length > 0 && (
+            <Box sx={{ px: 2.5, py: 1.5, borderTop: `2px solid ${T.border}`, background: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.muted }}>
+                Total Payable
+              </Typography>
+              <Typography sx={{ fontSize: 16, fontWeight: 800, color: T.danger, fontFamily: "'Rajdhani', sans-serif" }}>
+                Rs.{fmt(supplierSummary.reduce((sum, item) => sum + Number(item.due || 0), 0))}
+              </Typography>
+            </Box>
+          )}
         </Box>
-      </DialogContent>
-      <DialogActions sx={{ p: 2, gap: 1.5, borderTop: "1px solid #e2e8f0" }}>
-        <Button variant="outlined" onClick={onClose}>Cancel</Button>
-        <Button variant="contained" color="success" onClick={handleDone}
-          disabled={loading||done||(paymentType==="Partial"&&!!amtError)} sx={{ fontWeight:700, px:4 }}>
-          {loading ? "Saving..." : "Done"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-};
-
-// ── Company Row ───────────────────────────────────────────────
-const CompanyRow = ({ supplier, purchases, serial, onPay, onDelete }) => {
-  const [open, setOpen] = useState(false);
-  const companyTotal = purchases.reduce((s, p) => s + (p.finalPayable || p.grandTotal || 0), 0);
-  const companyPaid  = purchases.reduce((s, p) => s + (p.totalPaid  || 0), 0);
-  const companyDue   = purchases.reduce((s, p) => s + (p.totalDue   || 0), 0);
-  const totalItems   = purchases.reduce((s, p) => s + (p.products?.length || 0), 0);
-  const companyStatus = companyDue <= 0 && companyTotal > 0 ? "Paid" : companyPaid > 0 ? "Partial" : "Pending";
-
-  return (
-    <>
-      <TableRow hover sx={{ "& > *": { borderBottom:"unset" }, cursor:"pointer" }} onClick={() => setOpen(!open)}>
-        <TableCell sx={{ width:40 }}>
-          <IconButton size="small">{open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}</IconButton>
-        </TableCell>
-        <TableCell sx={{ fontWeight:600, color:"#94a3b8", width:40 }}>{serial}</TableCell>
-        <TableCell>
-          <Box display="flex" alignItems="center" gap={1.5}>
-            <Avatar sx={{ width:32, height:32, bgcolor:"#eff6ff", color:"#2563eb", fontSize:13, fontWeight:700 }}>
-              {supplier.companyName?.[0]?.toUpperCase() || supplier.name?.[0]?.toUpperCase()}
-            </Avatar>
-            <Box>
-              <Typography fontWeight={700} fontSize={14}>{supplier.companyName || supplier.name}</Typography>
-              <Typography fontSize={11} color="text.secondary">{purchases.length} invoice{purchases.length!==1?"s":""} · {totalItems} items</Typography>
-            </Box>
-          </Box>
-        </TableCell>
-        <TableCell sx={{ fontWeight:700, color:"#1d4ed8" }}>Rs.{fmt(companyTotal)}</TableCell>
-        <TableCell sx={{ fontWeight:600, color:"#15803d" }}>Rs.{fmt(companyPaid)}</TableCell>
-        <TableCell sx={{ fontWeight:700, color:companyDue>0?"#dc2626":"#15803d" }}>Rs.{fmt(companyDue)}</TableCell>
-        <TableCell>
-          <Chip label={companyStatus} size="small" color={companyStatus==="Paid"?"success":companyStatus==="Partial"?"warning":"error"} />
-        </TableCell>
-        <TableCell />
-      </TableRow>
-
-      <TableRow>
-        <TableCell colSpan={9} sx={{ py:0, background:"#fafbfc" }}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ mx:2, my:1.5 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ background:"#f1f5f9" }}>
-                    {["Invoice No","Supplier Name","Date","Items","Color/Design","Total Amount","Paid","Pending","Actions"].map((h)=>(
-                      <TableCell key={h} sx={{ fontWeight:600, fontSize:12, whiteSpace:"nowrap" }}>{h}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {purchases.map((p) => {
-                    const payable = p.finalPayable || p.grandTotal || 0;
-                    const paid    = p.totalPaid    || 0;
-                    const due     = p.totalDue     || 0;
-                    const isPaid  = p.paymentStatus === "Paid";
-                    return (
-                      <TableRow key={p._id} hover>
-                        <TableCell><Typography fontSize={12} fontWeight={700} color="#2563eb">{p.invoiceNo}</Typography></TableCell>
-                        <TableCell sx={{ fontSize:12 }}>{supplier.supplierName || supplier.name || "—"}</TableCell>
-                        <TableCell sx={{ fontSize:12, color:"#64748b", whiteSpace:"nowrap" }}>{fmtDate(p.invoiceDate)}</TableCell>
-                        <TableCell sx={{ fontSize:12 }}>{p.products?.length || 0} items</TableCell>
-                        <TableCell sx={{ fontSize:12, maxWidth:220 }}>{listColorDesigns(p)}</TableCell>
-                        <TableCell sx={{ fontSize:12, fontWeight:600 }}>Rs.{fmt(payable)}</TableCell>
-                        <TableCell sx={{ fontSize:12, fontWeight:600, color:"#15803d" }}>Rs.{fmt(paid)}</TableCell>
-                        <TableCell sx={{ fontSize:12, fontWeight:600, color:due>0?"#dc2626":"#15803d" }}>Rs.{fmt(due)}</TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Box display="flex" gap={0.5} alignItems="center">
-                            {/* PAY — always shown, disabled when already paid */}
-                            <Button size="small" variant="contained" color="success"
-                              disabled={isPaid}
-                              sx={{ minWidth:48, fontWeight:700, fontSize:11,
-                                ...(isPaid && { bgcolor:"#d1fae5 !important", color:"#6ee7b7 !important", boxShadow:"none" }) }}
-                              onClick={() => onPay(p)}>
-                              PAY
-                            </Button>
-                            {/* EDIT */}
-                            <Button size="small" variant="outlined"
-                              sx={{ minWidth:48, fontSize:11 }}
-                              onClick={() => onPay(p)}>
-                              EDIT
-                            </Button>
-                            {/* EXPORT */}
-                            <ExportMenu purchase={p} supplier={supplier} />
-                            {/* DELETE */}
-                            <IconButton size="small" color="error"
-                              onClick={() => onDelete(p)}
-                              sx={{ border:"1px solid #fecaca", borderRadius:1, "&:hover":{ background:"#fef2f2" } }}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-                {/* Footer totals */}
-                <TableBody>
-                  <TableRow sx={{ background:"#f8fafc" }}>
-                    <TableCell colSpan={3} sx={{ borderTop:"2px solid #e2e8f0", py:1 }}>
-                      <Typography fontSize={12} fontWeight={700} color="text.secondary">Total Items: {totalItems}</Typography>
-                    </TableCell>
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0" }} />
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0" }} />
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0", fontWeight:800, fontSize:13, color:"#1d4ed8" }}>Rs.{fmt(companyTotal)}</TableCell>
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0", fontWeight:800, fontSize:13, color:"#15803d" }}>Rs.{fmt(companyPaid)}</TableCell>
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0", fontWeight:800, fontSize:13, color:companyDue>0?"#dc2626":"#15803d" }}>Rs.{fmt(companyDue)}</TableCell>
-                    <TableCell sx={{ borderTop:"2px solid #e2e8f0" }} />
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
-  );
-};
-
-// ── Main Page ─────────────────────────────────────────────────
-const SupplierPayment = ({ onBack }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const purchaseDataFromNav = location.state || null;
-  const autoOpenFired = useRef(false);
-
-  const [purchases,      setPurchases]      = useState([]);
-  const [suppliersMap,   setSuppliersMap]   = useState({});
-  const [tab,            setTab]            = useState(0);
-  const [search,         setSearch]         = useState("");
-  const [dialogPurchase, setDialogPurchase] = useState(null);
-
-  useEffect(() => { fetchAll(); }, []);
-
-  useEffect(() => {
-    if (autoOpenFired.current) return;
-    if (!purchaseDataFromNav?.supplierId || purchases.length === 0) return;
-    const match = purchases.find((p) => p.supplierId === purchaseDataFromNav.supplierId);
-    if (match) { autoOpenFired.current = true; setDialogPurchase(match); navigate(location.pathname, { replace:true, state:null }); }
-  }, [purchaseDataFromNav, purchases]);
-
-  const fetchAll = async () => {
-    try {
-      const [purRes, supRes] = await Promise.all([getPurchases(), getSuppliers()]);
-      const map = {};
-      (supRes.data || []).forEach((s) => { map[s._id] = s; });
-      setPurchases(purRes.data || []);
-      setSuppliersMap(map);
-    } catch { toast.error("Failed to fetch data"); }
-  };
-
-  const handleDelete = async (purchase) => {
-    if (!window.confirm(`Delete invoice "${purchase.invoiceNo}"? This cannot be undone.`)) return;
-    try { await deletePurchase(purchase._id); toast.success("Invoice deleted"); fetchAll(); }
-    catch { toast.error("Failed to delete invoice"); }
-  };
-
-  const groupedBySupplier = {};
-  purchases.forEach((p) => {
-    const sid = p.supplierId?.toString();
-    if (!groupedBySupplier[sid]) groupedBySupplier[sid] = [];
-    groupedBySupplier[sid].push(p);
-  });
-  Object.values(groupedBySupplier).forEach((arr) => arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
-
-  const allSupplierIds = Object.keys(groupedBySupplier).sort((a, b) => {
-    return new Date(groupedBySupplier[b][0]?.createdAt || 0) - new Date(groupedBySupplier[a][0]?.createdAt || 0);
-  });
-
-  const totalGrandAll = purchases.reduce((s, p) => s + (p.finalPayable || p.grandTotal || 0), 0);
-  const totalPaidAll  = purchases.reduce((s, p) => s + (p.totalPaid  || 0), 0);
-  const totalDueAll   = purchases.reduce((s, p) => s + (p.totalDue   || 0), 0);
-  const pendingCount  = purchases.filter((p) => p.paymentStatus !== "Paid").length;
-  const paidCount     = purchases.filter((p) => p.paymentStatus === "Paid").length;
-  const partialCount  = purchases.filter((p) => p.paymentStatus === "Partial").length;
-
-  const filteredIds = allSupplierIds.filter((sid) => {
-    const s = suppliersMap[sid];
-    const pList = groupedBySupplier[sid] || [];
-    const q = search.trim().toLowerCase();
-    let matchesTab = true;
-    if (tab === 1) matchesTab = pList.some((p) => p.paymentStatus !== "Paid");
-    if (tab === 2) matchesTab = pList.some((p) => p.paymentStatus === "Paid");
-    if (tab === 3) matchesTab = pList.some((p) => p.paymentStatus === "Partial");
-    if (!matchesTab) return false;
-    if (!q) return true;
-    return [s?.companyName, s?.name, s?.supplierName, s?.companyPhone, s?.phone, ...pList.map((p) => p.invoiceNo)]
-      .some((v) => v?.toLowerCase().includes(q));
-  });
-
-  return (
-    <Box p={3}>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>Supplier Payment</Typography>
-          <Typography variant="body2" color="text.secondary">Manage and track payments per purchase invoice</Typography>
-        </Box>
-        {onBack && <Button variant="outlined" onClick={onBack}>Back</Button>}
       </Box>
-
-      <Grid container spacing={3} mb={3}>
-        {[
-          { label:"Total Purchase Value", val:`Rs.${fmt(totalGrandAll)}`, sub:`${purchases.length} purchases`, bg:"#eff6ff", border:"#bfdbfe", color:"#1d4ed8" },
-          { label:"Total Paid",           val:`Rs.${fmt(totalPaidAll)}`,  sub:`${paidCount} fully paid`,        bg:"#ecfdf5", border:"#bbf7d0", color:"#15803d" },
-          { label:"Total Due",            val:`Rs.${fmt(totalDueAll)}`,   sub:`${pendingCount} pending`,         bg:"#fef2f2", border:"#fecaca", color:"#dc2626" },
-        ].map((s) => (
-          <Grid item xs={12} sm={4} key={s.label}>
-            <Card sx={{ p:2.5, borderRadius:3, background:s.bg, border:`1.5px solid ${s.border}`, boxShadow:"none" }}>
-              <Typography variant="body2" color="text.secondary">{s.label}</Typography>
-              <Typography variant="h5" fontWeight={800} color={s.color}>{s.val}</Typography>
-              <Typography variant="caption" color="text.secondary">{s.sub}</Typography>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Card sx={{ p:3, borderRadius:3, boxShadow:"0 2px 12px rgba(0,0,0,0.07)" }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb:2 }}>
-          {[
-            { label:"All Payments", count:purchases.length },
-            { label:"Pending",      count:pendingCount,  color:"error"   },
-            { label:"Paid",         count:paidCount,     color:"success" },
-            { label:"Partial",      count:partialCount,  color:"warning" },
-          ].map(({ label, count, color }) => (
-            <Tab key={label} label={
-              <Box display="flex" gap={1} alignItems="center">
-                {label}<Chip label={count} size="small" color={color || undefined} />
-              </Box>
-            } />
-          ))}
-        </Tabs>
-
-        <TextField fullWidth size="small"
-          placeholder="Search by company name, supplier name, invoice..."
-          value={search} onChange={(e) => setSearch(e.target.value)} sx={{ mb:2 }}
-          InputProps={{ startAdornment: <Typography fontSize={15} sx={{ mr:1, color:"text.secondary" }}>🔍</Typography> }}
-        />
-
-        {filteredIds.length === 0 ? (
-          <Box sx={{ textAlign:"center", py:6, color:"text.secondary" }}>
-            <Typography>{search ? "No results found" : "No records found"}</Typography>
-          </Box>
-        ) : (
-          <Box sx={{ overflowX:"auto" }}>
-            <Table>
-              <TableHead sx={{ background:"#f1f5f9" }}>
-                <TableRow>
-                  <TableCell sx={{ width:40 }} />
-                  <TableCell sx={{ fontWeight:600, fontSize:13, width:40 }}>SNo</TableCell>
-                  <TableCell sx={{ fontWeight:600, fontSize:13 }}>Company Name</TableCell>
-                  <TableCell sx={{ fontWeight:600, fontSize:13 }}>Company Total Amount</TableCell>
-                  <TableCell sx={{ fontWeight:600, fontSize:13 }}>Company Paid Amount</TableCell>
-                  <TableCell sx={{ fontWeight:600, fontSize:13 }}>Company Pending Amount</TableCell>
-                  <TableCell sx={{ fontWeight:600, fontSize:13 }}>Status</TableCell>
-                  <TableCell />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredIds.map((sid, i) => {
-                  const supplier = suppliersMap[sid] || { name: groupedBySupplier[sid][0]?.supplierName || "Unknown" };
-                  const pList    = groupedBySupplier[sid] || [];
-                  const filtered =
-                    tab === 1 ? pList.filter((p) => p.paymentStatus !== "Paid")    :
-                    tab === 2 ? pList.filter((p) => p.paymentStatus === "Paid")    :
-                    tab === 3 ? pList.filter((p) => p.paymentStatus === "Partial") :
-                    pList;
-                  return (
-                    <CompanyRow key={sid} supplier={supplier} purchases={filtered} serial={i+1}
-                      onPay={(p) => setDialogPurchase(p)} onDelete={handleDelete} />
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Box>
-        )}
-      </Card>
-
-      <PaymentDialog
-        purchase={dialogPurchase}
-        supplier={dialogPurchase ? suppliersMap[dialogPurchase.supplierId?.toString()] : null}
-        open={!!dialogPurchase}
-        onClose={() => setDialogPurchase(null)}
-        onSaved={fetchAll}
-      />
     </Box>
   );
 };

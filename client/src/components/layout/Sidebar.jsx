@@ -8,9 +8,8 @@ import {
 import DashboardIcon        from "@mui/icons-material/Dashboard";
 import InventoryIcon        from "@mui/icons-material/Inventory";
 import ReceiptIcon          from "@mui/icons-material/Receipt";
-import DescriptionIcon      from "@mui/icons-material/Description";
+import SettingsIcon         from "@mui/icons-material/Settings";
 import PeopleIcon           from "@mui/icons-material/People";
-import ManageAccountsIcon   from "@mui/icons-material/ManageAccounts";
 import LocalShippingIcon    from "@mui/icons-material/LocalShipping";
 import AddBusinessIcon      from "@mui/icons-material/AddBusiness";
 import ListAltIcon          from "@mui/icons-material/ListAlt";
@@ -27,8 +26,8 @@ import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-const SIDEBAR_WIDTH = 240;
-const COLLAPSED_WIDTH = 56;
+const SIDEBAR_WIDTH = 208;
+const COLLAPSED_WIDTH = 52;
 
 const Sidebar = ({ open = true, onToggle, onCreateBillClick }) => {
 
@@ -55,19 +54,18 @@ const Sidebar = ({ open = true, onToggle, onCreateBillClick }) => {
   ];
 
   const bottomItems = [
-    { label: "Edit Bill Format", icon: <DescriptionIcon />, path: "/bill-format", adminOnly: true },
-    { label: "User Management", icon: <ManageAccountsIcon />, path: "/users", adminOnly: true },
+    { label: "Settings", icon: <SettingsIcon />, path: "/settings", adminOnly: true },
   ];
 
   const supplierSubItems = [
     { label: "Supplier Create", icon: <AddBusinessIcon />, path: "/suppliers/create" },
     { label: "Supplier Products", icon: <ListAltIcon />, path: "/suppliers/products" },
-    { label: "Supplier Payment", icon: <PaymentsIcon />, path: "/suppliers/payment" },
+    { label: "Pay to Supplier", icon: <PaymentsIcon />, path: "/suppliers/payment" },
+    { label: "Supplier Product Details", icon: <ListAltIcon />, path: "/suppliers/details" },
   ];
 
   const productSubItems = [
     { label: "Add Products", icon: <AddBoxIcon />, path: "/products/add" },
-    { label: "Add Supplier Products", icon: <LocalShippingIcon />, path: "/products/supplier" },
     { label: "Product Details", icon: <ListAltIcon />, path: "/products/details" },
   ];
 
@@ -202,7 +200,7 @@ const Sidebar = ({ open = true, onToggle, onCreateBillClick }) => {
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleClose}>
         <MenuItem disabled>
           <Typography variant="body2" color="text.secondary">
-            {user?.email}
+            {user?.phone}
           </Typography>
         </MenuItem>
 

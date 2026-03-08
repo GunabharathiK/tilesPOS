@@ -10,6 +10,8 @@ export const updatePayment   = (id, data)    => API.patch(`/suppliers/${id}/paym
 
 // ── Purchase flow ────────────────────────────────────────────
 export const createPurchase        = (data)       => API.post("/suppliers/purchase", data);
+export const updatePurchase        = (purchaseId, data) =>
+  API.put(`/suppliers/purchase/${purchaseId}`, data);
 export const getPurchases          = (supplierId) =>
   supplierId
     ? API.get(`/suppliers/purchase?supplierId=${supplierId}`)

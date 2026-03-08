@@ -1,183 +1,773 @@
 import {
-  Box, Card, Typography, Table, TableHead, TableBody,
-  TableRow, TableCell, Button, Chip, TextField,
-  Collapse, IconButton, Divider,
+  Box,
+  Button,
+  Dialog,
+  DialogContent,
+  IconButton,
+  Typography,
 } from "@mui/material";
-import DeleteIcon            from "@mui/icons-material/Delete";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon   from "@mui/icons-material/KeyboardArrowUp";
-import { useEffect, useState } from "react";
-import { getSuppliers, deleteSupplier } from "../../services/supplierService";
+import CloseIcon from "@mui/icons-material/Close";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import ConfirmDialog from "../common/ConfirmDialog";
+import {
+  deleteSupplier,
+  getPurchases,
+  getSuppliers,
+} from "../../services/supplierService";
 import toast from "react-hot-toast";
 
-// ── Single Supplier Row ──────────────────────────────────────
-const SupplierRow = ({ supplier, onDelete, onEdit }) => {
-  const [open, setOpen] = useState(false);
+/* ─── Design Tokens ─────────────────────────────────────────────────────────── */
+const T = {
+  primary:      "#2563eb",
+  primaryDark:  "#1d4ed8",
+  primaryLight: "#eff6ff",
+  success:      "#15803d",
+  successLight: "#f0fdf4",
+  danger:       "#b91c1c",
+  dangerLight:  "#fef2f2",
+  warning:      "#b45309",
+  warningLight: "#fffbeb",
+  dark:         "#1c2333",
+  text:         "#374151",
+  muted:        "#6b7280",
+  border:       "#e5e7eb",
+  bg:           "#f0f4f8",
+  white:        "#ffffff",
+  headerBg:     "#f8fafc",
+  rowHover:     "#fafbff",
+  star:         "#f59e0b",
+  starEmpty:    "#e5e7eb",
+};
 
+/* ─── Helpers ────────────────────────────────────────────────────────────────── */
+const fmt = (n = 0) => "₹" + Number(n).toLocaleString("en-IN");
+
+const fmtDate = (value) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-IN");
+};
+
+const getNumericRating = (rating) => {
+  if (typeof rating === "number") return rating;
+  if (typeof rating === "string") {
+    const starCount = (rating.match(/⭐/g) || []).length;
+    if (starCount) return starCount;
+  }
+  return 4;
+};
+
+const getSupplierProducts = (supplier) => {
+  if (Array.isArray(supplier.productsSupplied) && supplier.productsSupplied.length > 0)
+    return supplier.productsSupplied;
+  if (Array.isArray(supplier.items) && supplier.items.length > 0)
+    return [...new Set(supplier.items.map((item) => item.name).filter(Boolean))];
+  return [];
+};
+
+/* ─── Star Rating ────────────────────────────────────────────────────────────── */
+const StarRating = ({ rating = 4 }) => {
+  const num = getNumericRating(rating);
   return (
-    <>
-      <TableRow hover sx={{ "& > *": { borderBottom: "unset" } }}>
-        <TableCell>
-          <IconButton size="small" onClick={() => setOpen(!open)}>
-            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-          </IconButton>
-        </TableCell>
-        <TableCell sx={{ fontWeight: 600 }}>{supplier.name}</TableCell>
-        <TableCell>{supplier.phone}</TableCell>
-        <TableCell>{supplier.address}</TableCell>
-        <TableCell>{supplier.items.length}</TableCell>
-        <TableCell sx={{ fontWeight: 700, color: "#15803d" }}>
-          ₹{supplier.items
-              .reduce((s, it) => s + Number(it.qty) * Number(it.price), 0)
-              .toLocaleString("en-IN")}
-        </TableCell>
-        <TableCell>
-          <Chip label={supplier.paymentStatus} size="small"
-            color={
-              supplier.paymentStatus === "Paid"    ? "success" :
-              supplier.paymentStatus === "Partial" ? "warning" : "error"
-            }
-          />
-        </TableCell>
-        <TableCell>
-          <Box display="flex" gap={1} alignItems="center">
-            <Button size="small" variant="outlined" color="primary"
-              onClick={() => onEdit(supplier)}>
-              Edit
-            </Button>
-            <IconButton size="small" color="error"
-              onClick={() => onDelete(supplier._id, supplier.name)}>
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Box>
-        </TableCell>
-      </TableRow>
-
-      {/* Expandable items — view only */}
-      <TableRow>
-        <TableCell colSpan={8} sx={{ py: 0 }}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ m: 2, background: "#f8fafc", borderRadius: 2, p: 2 }}>
-              <Typography variant="subtitle2" fontWeight={700} color="text.secondary" mb={1.5}>
-                ITEMS SUPPLIED
-              </Typography>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ background: "#f1f5f9" }}>
-                    {["#", "Image", "Item Name", "Size", "Qty", "Unit", "GST%", "Price/Unit", "Total"].map((h) => (
-                      <TableCell key={h} sx={{ fontWeight: 600, fontSize: 12 }}>{h}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {supplier.items.map((it, i) => (
-                    <TableRow key={i}>
-                      <TableCell>{i + 1}</TableCell>
-                      <TableCell>
-                        {it.image
-                          ? <img src={it.image} alt={it.name}
-                              style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 6, border: "1px solid #e2e8f0" }} />
-                          : <Box sx={{ width: 40, height: 40, borderRadius: 1.5, background: "#f1f5f9",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 14, fontWeight: 700, color: "#94a3b8" }}>
-                              {it.name?.[0]?.toUpperCase()}
-                            </Box>
-                        }
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{it.name}</TableCell>
-                      <TableCell>
-                        <Chip label={it.size} size="small" sx={{ background: "#eff6ff", color: "#1d4ed8" }} />
-                      </TableCell>
-                      <TableCell>{it.qty}</TableCell>
-                      <TableCell>{it.unit}</TableCell>
-                      <TableCell>
-                        <Chip label={`${it.gst ?? 0}%`} size="small" sx={{ background: "#fef3c7", color: "#92400e" }} />
-                      </TableCell>
-                      <TableCell>₹{it.price}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>
-                        ₹{(Number(it.qty) * Number(it.price)).toLocaleString("en-IN")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
+    <Box sx={{ display: "flex", gap: "1px", alignItems: "center" }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Box
+          key={i}
+          component="span"
+          sx={{ fontSize: 14, lineHeight: 1, color: i <= num ? T.star : T.starEmpty }}
+        >
+          ★
+        </Box>
+      ))}
+    </Box>
   );
 };
 
-// ── Main Component ───────────────────────────────────────────
-const SupplierDetails = ({ onBack, onEdit }) => {
-  const [suppliers, setSuppliers] = useState([]);
-  const [search, setSearch]       = useState("");
+/* ─── Detail Row (ViewDialog) ───────────────────────────────────────────────── */
+const DetailRow = ({ label, value }) => (
+  <Box sx={{ display: "flex", gap: 1.5, py: 0.8, borderBottom: `1px solid ${T.border}` }}>
+    <Typography sx={{ fontSize: 12, color: T.muted, minWidth: 130, flexShrink: 0 }}>
+      {label}
+    </Typography>
+    <Typography sx={{ fontSize: 12, fontWeight: 500, color: T.dark, wordBreak: "break-word" }}>
+      {value || "-"}
+    </Typography>
+  </Box>
+);
 
-  useEffect(() => { fetchSuppliers(); }, []);
+/* ─── View Dialog ────────────────────────────────────────────────────────────── */
+const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase }) => {
+  if (!supplier) return null;
+
+  const statusBadge =
+    supplier.paymentStatus === "Paid"
+      ? { bg: T.successLight, color: T.success }
+      : supplier.paymentStatus === "Partial"
+        ? { bg: T.warningLight, color: T.warning }
+        : { bg: T.dangerLight, color: T.danger };
+
+  const products = getSupplierProducts(supplier);
+  const supplierPurchases = purchases.filter((purchase) => {
+    const purchaseSupplierId = purchase.supplierId?._id || purchase.supplierId;
+    return purchaseSupplierId === supplier._id;
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: "12px", overflow: "hidden" } }}
+    >
+      <Box
+        sx={{
+          background: `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`,
+          px: 2.5, py: 2,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}
+      >
+        <Box>
+          <Typography sx={{ fontSize: 18, fontWeight: 700, color: "#fff", fontFamily: "'Rajdhani', sans-serif" }}>
+            {supplier.companyName || supplier.name}
+          </Typography>
+          <Typography sx={{ fontSize: 12, color: "rgba(255,255,255,.75)", mt: 0.3 }}>
+            {[supplier.city, supplier.state].filter(Boolean).join(", ")}
+            {supplier.gstin ? ` | GSTIN: ${supplier.gstin}` : ""}
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} sx={{ color: "rgba(255,255,255,.85)" }}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+
+      <Box sx={{ display: "flex", borderBottom: `1px solid ${T.border}`, background: T.white }}>
+        {[
+          { label: "Total Purchase", value: fmt(supplier.totalValue || 0), color: T.primary },
+          { label: "Total Paid",     value: fmt(supplier.totalPaid  || 0), color: T.success },
+          { label: "Payable",        value: fmt(supplier.totalDue   || 0), color: (supplier.totalDue || 0) > 0 ? T.danger : T.success },
+        ].map((item) => (
+          <Box key={item.label} sx={{ flex: 1, px: 2, py: 1.5, textAlign: "center", borderRight: `1px solid ${T.border}` }}>
+            <Typography sx={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", fontWeight: 700 }}>
+              {item.label}
+            </Typography>
+            <Typography sx={{ fontSize: 16, fontWeight: 800, color: item.color, fontFamily: "'Rajdhani', sans-serif" }}>
+              {item.value}
+            </Typography>
+          </Box>
+        ))}
+        <Box sx={{ flex: 1, px: 2, py: 1.5, textAlign: "center" }}>
+          <Typography sx={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", fontWeight: 700, mb: 0.5 }}>
+            Status
+          </Typography>
+          <Box sx={{ background: statusBadge.bg, color: statusBadge.color, fontSize: 11, fontWeight: 600, px: "10px", py: "3px", borderRadius: "12px", display: "inline-block" }}>
+            {supplier.paymentStatus || "Pending"}
+          </Box>
+        </Box>
+      </Box>
+
+      <DialogContent sx={{ p: 0 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+          <Box sx={{ p: 2.5, borderRight: `1px solid ${T.border}` }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".8px", mb: 1.5 }}>
+              Company Details
+            </Typography>
+            <DetailRow label="Company Name"   value={supplier.companyName || supplier.name} />
+            <DetailRow label="Contact Person" value={supplier.supplierName} />
+            <DetailRow label="Mobile"         value={supplier.companyPhone || supplier.phone} />
+            <DetailRow label="Alt Mobile"     value={supplier.altPhone} />
+            <DetailRow label="Email"          value={supplier.companyEmail} />
+            <DetailRow label="Website"        value={supplier.companyWebsite} />
+            <DetailRow label="GSTIN"          value={supplier.gstin} />
+            <DetailRow label="Payment Terms"  value={supplier.paymentTerms} />
+            <DetailRow label="Address"        value={supplier.companyAddress || supplier.address} />
+            <DetailRow label="City / State"   value={[supplier.city, supplier.state].filter(Boolean).join(", ")} />
+            <DetailRow label="Pincode"        value={supplier.pincode} />
+          </Box>
+          <Box sx={{ p: 2.5 }}>
+            <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".8px", mb: 1.5 }}>
+              Bank And Business Details
+            </Typography>
+            <DetailRow label="Products"       value={products.join(", ")} />
+            <DetailRow label="Brands"         value={supplier.brands} />
+            <DetailRow label="Credit Limit"   value={supplier.creditLimit ? fmt(supplier.creditLimit) : ""} />
+            <DetailRow label="Discount %"     value={supplier.discountPct} />
+            <DetailRow label="Bank Name"      value={supplier.bankName} />
+            <DetailRow label="Account No"     value={supplier.accountNo} />
+            <DetailRow label="IFSC"           value={supplier.ifscCode} />
+            <DetailRow label="Account Holder" value={supplier.accountHolder} />
+            <DetailRow label="Branch"         value={supplier.branch} />
+            <DetailRow label="UPI ID"         value={supplier.upiId} />
+            <DetailRow label="Priority"       value={supplier.priority} />
+            <DetailRow label="Notes"          value={supplier.internalNotes} />
+          </Box>
+        </Box>
+
+        <Box sx={{ p: 2.5, borderTop: `1px solid ${T.border}` }}>
+          <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".8px", mb: 1.5 }}>
+            Purchased Items
+          </Typography>
+          {supplierPurchases.length === 0 ? (
+            <Typography sx={{ fontSize: 13, color: T.muted }}>
+              No purchase entries available for this supplier.
+            </Typography>
+          ) : (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.2, maxHeight: 260, overflowY: "auto", pr: 0.5 }}>
+              {supplierPurchases.map((purchase) => (
+                <Box key={purchase._id} sx={{ border: `1px solid ${T.border}`, borderRadius: "8px", p: 1.5, background: "#fafbfc" }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, alignItems: "flex-start", mb: 1.2 }}>
+                    <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>
+                      {purchase.grnNo || purchase.invoiceNo}
+                    </Typography>
+                    <Button onClick={() => onEditPurchase(purchase)} sx={{ background: T.primaryLight, color: T.primary, fontSize: 12, fontWeight: 700, minWidth: 140 }}>
+                      Edit Purchased Item
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1.5, mb: 1.2 }}>
+                    {[
+                      { label: "Invoice", value: purchase.invoiceNo || "-" },
+                      { label: "Date",    value: fmtDate(purchase.invoiceDate) },
+                      { label: "Total",   value: fmt(purchase.grandTotal || purchase.totalInvoiceAmount || 0), color: T.dark,   weight: 700 },
+                      { label: "Due",     value: fmt(purchase.totalDue   || 0), color: Number(purchase.totalDue || 0) > 0 ? T.danger : T.success, weight: 700 },
+                    ].map((field) => (
+                      <Box key={field.label} sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontSize: 10, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: 0.3 }}>
+                          {field.label}
+                        </Typography>
+                        <Typography sx={{ fontSize: 12, color: field.color || T.text, fontWeight: field.weight || 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {field.value}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "6px", overflow: "hidden", background: T.white }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,2.1fr) 88px 88px 108px", px: 1.5, py: 1, background: "#f3f6fb", borderBottom: `1px solid ${T.border}` }}>
+                      {["Item", "Size", "Qty", "Amount"].map((h) => (
+                        <Typography key={h} sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".4px" }}>
+                          {h}
+                        </Typography>
+                      ))}
+                    </Box>
+                    {(purchase.products || []).length === 0 ? (
+                      <Box sx={{ px: 1.5, py: 1.2 }}>
+                        <Typography sx={{ fontSize: 12, color: T.muted }}>No purchased items</Typography>
+                      </Box>
+                    ) : (
+                      (purchase.products || []).map((item, index) => (
+                        <Box
+                          key={`${purchase._id}-${index}`}
+                          sx={{
+                            display: "grid", gridTemplateColumns: "minmax(0,2.1fr) 88px 88px 108px",
+                            px: 1.5, py: 1,
+                            borderBottom: index < purchase.products.length - 1 ? `1px solid ${T.border}` : "none",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Typography sx={{ fontSize: 12, color: T.dark, fontWeight: 600, pr: 1 }}>{item.name || "-"}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text }}>{item.size || "-"}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text }}>{item.received || item.qty || 0}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.dark, fontWeight: 700, textAlign: "right" }}>
+                            ₹{Number((Number(item.sqft) || 0) * (Number(item.price) || 0)).toLocaleString("en-IN")}
+                          </Typography>
+                        </Box>
+                      ))
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </Box>
+
+        <Box sx={{ px: 2.5, py: 1.8, borderTop: `1px solid ${T.border}`, background: "#fafbfc", display: "flex", gap: 1, justifyContent: "flex-end" }}>
+          <Button onClick={onClose} sx={{ border: `1px solid ${T.border}`, color: T.text }}>
+            Close
+          </Button>
+          <Button
+            onClick={() => { onClose(); onEdit(supplier); }}
+            sx={{ background: T.primary, color: "#fff", "&:hover": { background: T.primaryDark } }}
+          >
+            Edit Supplier
+          </Button>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+/* ─── Supplier Table Row ─────────────────────────────────────────────────────── */
+const SupplierRow = ({ supplier, serial, onView, onPurchase, onPay, onDelete }) => {
+  const totalPurchase = supplier.totalValue || 0;
+  const payable       = supplier.totalDue   || 0;
+  const products      = getSupplierProducts(supplier);
+
+  const td = (extraStyle = {}) => ({
+    padding: "0 10px",
+    height: 52,
+    verticalAlign: "middle",
+    borderBottom: `1px solid ${T.border}`,
+    ...extraStyle,
+  });
+
+  return (
+    <tr
+      onMouseEnter={(e) => (e.currentTarget.style.background = T.rowHover)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = T.white)}
+      style={{ transition: "background .12s" }}
+    >
+      {/* S.No */}
+      <td style={td({ width: 52 })}>
+        <Typography sx={{ fontSize: 11, color: T.muted, fontFamily: "'DM Mono', monospace", lineHeight: 1.3 }}>
+          {serial}
+        </Typography>
+      </td>
+
+      {/* Supplier Name */}
+      <td style={td({ width: 160 })}>
+        <Typography sx={{ fontWeight: 700, fontSize: 12, color: T.dark, lineHeight: 1.3 }}>
+          {supplier.companyName || supplier.name}
+        </Typography>
+      </td>
+
+      {/* Contact Person */}
+      <td style={td({ width: 130 })}>
+        <Typography sx={{ fontSize: 12, color: T.text }}>
+          {supplier.supplierName || "-"}
+        </Typography>
+      </td>
+
+      {/* Mobile */}
+      <td style={td({ width: 120 })}>
+        <Typography sx={{ fontSize: 12, color: T.text, fontFamily: "'DM Mono', monospace" }}>
+          {supplier.companyPhone || supplier.phone || "-"}
+        </Typography>
+      </td>
+
+      {/* Products */}
+      <td style={td({ width: 110 })}>
+        <Typography sx={{ fontSize: 12, color: T.text }}>
+          {products.length > 0
+            ? products.slice(0, 2).join(", ") + (products.length > 2 ? "..." : "")
+            : "-"}
+        </Typography>
+      </td>
+
+      {/* Terms */}
+      <td style={td({ width: 80, textAlign: "right" })}>
+        <Typography sx={{ fontSize: 12, color: T.text, whiteSpace: "nowrap" }}>
+          {supplier.paymentTerms || "30 days"}
+        </Typography>
+      </td>
+
+      {/* Total Purchase */}
+      <td style={td({ width: 125, textAlign: "right" })}>
+        <Typography sx={{ fontWeight: 700, fontSize: 12, color: T.dark }}>
+          {fmt(totalPurchase)}
+        </Typography>
+      </td>
+
+      {/* Payable */}
+      <td style={td({ width: 100, textAlign: "right" })}>
+        <Typography sx={{ fontWeight: 700, fontSize: 12, color: payable > 0 ? T.danger : T.success }}>
+          {fmt(payable)}
+        </Typography>
+      </td>
+
+      {/* Rating */}
+      <td style={td({ width: 100, textAlign: "right" })}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+          <StarRating rating={supplier.rating} />
+        </Box>
+      </td>
+
+      {/* Actions */}
+      <td style={td({ width: 100 })}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
+          {/* View */}
+          <Box
+            onClick={() => onView(supplier)}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              px: "10px", py: "4px", borderRadius: "8px", cursor: "pointer",
+              border: `1px solid #cfd8e6`, background: "#f8fafc",
+              fontSize: 13, fontWeight: 700, color: "#1e3a8a",
+              minWidth: 90, justifyContent: "flex-start",
+              transition: "all .13s",
+              "&:hover": { background: "#eef2ff", borderColor: "#c7d2fe" },
+            }}
+          >
+            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>👁️</Box>
+            View
+          </Box>
+
+          {/* Buy */}
+          <Box
+            onClick={() => onPurchase(supplier)}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              px: "10px", py: "4px", borderRadius: "8px", cursor: "pointer",
+              border: "1px solid #cfd8e6", background: "#f8fafc",
+              fontSize: 13, fontWeight: 700, color: "#1e3a8a",
+              minWidth: 90, justifyContent: "flex-start",
+              transition: "all .13s",
+              "&:hover": { background: "#eef2ff", borderColor: "#c7d2fe" },
+            }}
+          >
+            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>📦</Box>
+            Buy
+          </Box>
+
+          {/* Pay */}
+          <Box
+            onClick={() => onPay(supplier)}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              px: "10px", py: "4px", borderRadius: "8px", cursor: "pointer",
+              border: "1px solid #cfd8e6", background: "#f8fafc",
+              fontSize: 13, fontWeight: 700, color: "#1e3a8a",
+              minWidth: 90, justifyContent: "flex-start",
+              transition: "all .13s",
+              "&:hover": { background: "#eef2ff", borderColor: "#c7d2fe" },
+            }}
+          >
+            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>💸</Box>
+            Pay
+          </Box>
+
+          {/* Delete */}
+          <Box
+            onClick={() => onDelete(supplier._id, supplier.companyName || supplier.name)}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "4px",
+              px: "10px", py: "4px", borderRadius: "8px", cursor: "pointer",
+              border: "1px solid #cfd8e6", background: "#f8fafc",
+              fontSize: 13, fontWeight: 700, color: "#1e3a8a",
+              minWidth: 90, justifyContent: "flex-start",
+              transition: "all .13s",
+              "&:hover": { background: "#eef2ff", borderColor: "#c7d2fe" },
+            }}
+          >
+            <Box component="span" sx={{ fontSize: 17, lineHeight: 1, flexShrink: 0 }}>🗑️</Box>
+            Delete
+          </Box>
+        </Box>
+      </td>
+    </tr>
+  );
+};
+
+/* ─── Main Component ─────────────────────────────────────────────────────────── */
+const SupplierDetails = ({ onEdit, onStatsChange }) => {
+  const navigate = useNavigate();
+  const [suppliers,     setSuppliers]     = useState([]);
+  const [purchases,     setPurchases]     = useState([]);
+  const [search,        setSearch]        = useState("");
+  const [stateFilter,   setStateFilter]   = useState("All States");
+  const [balFilter,     setBalFilter]     = useState("All Balance");
+  const [productFilter, setProductFilter] = useState("All Products");
+  const [viewSupplier,  setViewSupplier]  = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
 
   const fetchSuppliers = async () => {
     try {
-      const res = await getSuppliers();
-      setSuppliers(res.data);
-    } catch { toast.error("Failed to fetch suppliers"); }
+      const [supplierRes, purchaseRes] = await Promise.all([getSuppliers(), getPurchases()]);
+      const supplierData = Array.isArray(supplierRes.data) ? supplierRes.data : [];
+      setSuppliers(supplierData);
+      setPurchases(Array.isArray(purchaseRes.data) ? purchaseRes.data : []);
+      if (onStatsChange) onStatsChange(supplierData);
+    } catch {
+      toast.error("Failed to fetch suppliers");
+    }
   };
 
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete supplier "${name}"?`)) return;
+  useEffect(() => { fetchSuppliers(); }, []);
+
+  const productOptions = useMemo(() => {
+    const items = suppliers.flatMap((s) => getSupplierProducts(s));
+    return ["All Products", ...new Set(items)];
+  }, [suppliers]);
+
+  const filtered = useMemo(() => {
+    return suppliers.filter((supplier) => {
+      const q        = search.trim().toLowerCase();
+      const products = getSupplierProducts(supplier);
+
+      const matchSearch =
+        !q ||
+        (supplier.companyName || supplier.name || "").toLowerCase().includes(q) ||
+        (supplier.city         || "").toLowerCase().includes(q)  ||
+        (supplier.companyPhone || supplier.phone || "").includes(q) ||
+        (supplier.supplierName || "").toLowerCase().includes(q);
+
+      const matchState =
+        stateFilter === "All States" ||
+        (supplier.state || "").toLowerCase().includes(stateFilter.toLowerCase());
+
+      const matchBalance =
+        balFilter === "All Balance" ||
+        (balFilter === "Has Payable"
+          ? Number(supplier.totalDue || 0) > 0
+          : Number(supplier.totalDue || 0) <= 0);
+
+      const matchProduct =
+        productFilter === "All Products" ||
+        products.some((p) => p.toLowerCase().includes(productFilter.toLowerCase()));
+
+      return matchSearch && matchState && matchBalance && matchProduct;
+    });
+  }, [balFilter, productFilter, search, stateFilter, suppliers]);
+
+  const handleAddSupplier = () =>
+    onEdit ? onEdit(null) : navigate("/suppliers/create");
+
+  const handleEdit = (supplier) => {
+    setViewSupplier(null);
+    if (onEdit) { onEdit(supplier); return; }
+    navigate("/suppliers/create", { state: { editSupplier: supplier } });
+  };
+
+  const handlePurchase = (supplier) =>
+    navigate("/suppliers/products", { state: { supplierId: supplier._id, supplier } });
+
+  const handleEditPurchase = (purchase) => {
+    setViewSupplier(null);
+    const purchaseSupplier = suppliers.find(
+      (s) => s._id === (purchase.supplierId?._id || purchase.supplierId)
+    );
+    navigate("/suppliers/products", {
+      state: {
+        supplierId:   purchase.supplierId?._id || purchase.supplierId,
+        supplier:     purchaseSupplier || purchase.supplierId || null,
+        editPurchase: purchase,
+      },
+    });
+  };
+
+  const handlePay = (supplier) =>
+    navigate("/suppliers/payment", { state: { supplierId: supplier._id, supplier } });
+
+  const askDelete = (id, name) => setConfirmDelete({ open: true, id, name });
+
+  const handleDelete = async () => {
     try {
-      await deleteSupplier(id);
+      await deleteSupplier(confirmDelete.id);
       toast.success("Supplier deleted");
+      setConfirmDelete({ open: false, id: "", name: "" });
       fetchSuppliers();
-    } catch { toast.error("Delete failed"); }
+    } catch {
+      toast.error("Delete failed");
+    }
   };
 
-  const filtered = suppliers.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.phone.includes(search)
-  );
+  const selectStyle = {
+    background: T.white,
+    border: `1px solid ${T.border}`,
+    borderRadius: "7px",
+    padding: "7px 28px 7px 10px",
+    fontSize: 13,
+    color: T.text,
+    cursor: "pointer",
+    outline: "none",
+    appearance: "none",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 8px center",
+    fontFamily: "inherit",
+  };
+
+  const HEADERS = [
+    { label: "S.NO",           w: 52  },
+    { label: "SUPPLIER NAME",  w: 160 },
+    { label: "CONTACT PERSON", w: 130 },
+    { label: "MOBILE",         w: 120 },
+    { label: "PRODUCTS",       w: 110 },
+    { label: "TERMS",          w: 80,  right: true },
+    { label: "TOTAL PURCHASE", w: 125, right: true },
+    { label: "PAYABLE",        w: 100, right: true },
+    { label: "RATING",         w: 100, right: true },
+    { label: "ACTIONS",        w: 100, right: true },
+  ];
 
   return (
-    <Card sx={{ p: 3, borderRadius: 3, boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
-      <Box display="flex" alignItems="center" justifyContent="space-between" mb={2}>
-        <Typography variant="h6" fontWeight={700}>📋 Supplier Details</Typography>
+    <Box sx={{ fontFamily: "'Noto Sans', sans-serif" }}>
+
+      {/* ── Top bar ── */}
+      <Box sx={{
+        background: T.white,
+        borderRadius: "10px 10px 0 0",
+        border: `1px solid ${T.border}`,
+        borderBottom: `1px solid ${T.border}`,
+        px: 2.5, py: 1.5,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography sx={{ fontSize: 17 }}>📊</Typography>
+          <Typography sx={{ fontSize: 17, fontWeight: 700, color: T.dark }}>All Suppliers</Typography>
+        </Box>
+        <Box sx={{ display: "flex", gap: "10px" }}>
+          <Box
+            onClick={handleAddSupplier}
+            sx={{
+              display: "inline-flex", alignItems: "center", gap: "6px",
+              px: 2, py: "8px", borderRadius: "8px", cursor: "pointer",
+              background: T.primary, color: "#fff",
+              fontSize: 13, fontWeight: 600,
+              transition: "background .15s",
+              "&:hover": { background: T.primaryDark },
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add Supplier
+          </Box>
+          <Box sx={{
+            display: "inline-flex", alignItems: "center", gap: "6px",
+            px: "14px", py: "8px", borderRadius: "8px", cursor: "pointer",
+            background: T.white, color: T.text,
+            fontSize: 13, fontWeight: 500,
+            border: `1px solid ${T.border}`,
+            "&:hover": { background: "#f9fafb" },
+          }}>
+            <span style={{ color: "#16a34a", fontSize: 14 }}>⬇</span> Excel
+          </Box>
+        </Box>
       </Box>
-      <Divider sx={{ mb: 2 }} />
 
-      <TextField fullWidth placeholder="Search by name or phone..."
-        value={search} onChange={(e) => setSearch(e.target.value)}
-        size="small" sx={{ mb: 2 }} />
+      {/* ── Filter bar ── */}
+      <Box sx={{
+        background: T.white,
+        border: `1px solid ${T.border}`,
+        borderTop: "none",
+        borderBottom: `1px solid ${T.border}`,
+        px: 2.5, py: "10px",
+        display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap",
+      }}>
+        <Box sx={{ position: "relative" }}>
+          <Box component="span" sx={{
+            position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)",
+            fontSize: 14, color: "#3b82f6", pointerEvents: "none",
+          }}>🔍</Box>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search supplier name, city, m..."
+            style={{
+              paddingLeft: 30, paddingRight: 10, paddingTop: 7, paddingBottom: 7,
+              fontSize: 13, border: `1px solid ${T.border}`, borderRadius: "7px",
+              outline: "none", color: T.text, fontFamily: "inherit", width: 240,
+            }}
+          />
+        </Box>
 
-      <Box sx={{ overflowX: "auto" }}>
-        <Table>
-          <TableHead sx={{ background: "#f1f5f9" }}>
-            <TableRow>
-              <TableCell />
-              {["Supplier Name", "Phone", "Address", "Items", "Total Value", "Payment Status", "Actions"].map((h) => (
-                <TableCell key={h} sx={{ fontWeight: 600, fontSize: 13 }}>{h}</TableCell>
+        <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={selectStyle}>
+          {["All States", "Tamil Nadu", "Karnataka", "Gujarat", "Andhra Pradesh", "Kerala", "Maharashtra"].map((o) => (
+            <option key={o}>{o}</option>
+          ))}
+        </select>
+
+        <select value={balFilter} onChange={(e) => setBalFilter(e.target.value)} style={selectStyle}>
+          {["All Balance", "Has Payable", "Cleared"].map((o) => (
+            <option key={o}>{o}</option>
+          ))}
+        </select>
+
+        <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)} style={selectStyle}>
+          {productOptions.map((o) => <option key={o}>{o}</option>)}
+        </select>
+      </Box>
+
+      {/* ── Table ── */}
+      <Box sx={{
+        background: T.white,
+        border: `1px solid ${T.border}`,
+        borderTop: "none",
+        borderRadius: "0 0 10px 10px",
+        boxShadow: "0 1px 4px rgba(0,0,0,.05)",
+        overflowX: "auto",
+      }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+          <thead>
+            <tr style={{ background: T.headerBg }}>
+              {HEADERS.map(({ label, w, right }) => (
+                <th
+                  key={label}
+                  style={{
+                    width: w,
+                    padding: "9px 10px",
+                    textAlign: right ? "right" : "left",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: T.muted,
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                    borderBottom: `2px solid ${T.border}`,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {label}
+                </th>
               ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filtered.map((s) => (
+            </tr>
+          </thead>
+          <tbody>
+            {[...filtered].reverse().map((supplier, index) => (
               <SupplierRow
-                key={s._id}
-                supplier={s}
-                onDelete={handleDelete}
-                onEdit={onEdit}
+                key={supplier._id}
+                supplier={supplier}
+                serial={filtered.length - index}
+                onView={setViewSupplier}
+                onPurchase={handlePurchase}
+                onPay={handlePay}
+                onDelete={askDelete}
               />
             ))}
             {filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4, color: "text.secondary" }}>
-                  No suppliers found
-                </TableCell>
-              </TableRow>
+              <tr>
+                <td colSpan={10} style={{ padding: "56px 20px", textAlign: "center" }}>
+                  <Typography sx={{ color: T.muted, fontSize: 13 }}>
+                    {search
+                      ? "No suppliers match your search."
+                      : "No suppliers yet. Click Add Supplier to begin."}
+                  </Typography>
+                </td>
+              </tr>
             )}
-          </TableBody>
-        </Table>
+          </tbody>
+        </table>
+
+        {filtered.length > 0 && (
+          <Box sx={{
+            px: 2.5, py: "10px",
+            borderTop: `1px solid ${T.border}`,
+            background: T.headerBg,
+          }}>
+            <Typography sx={{ fontSize: 12, color: T.muted }}>
+              Showing {filtered.length} of {suppliers.length} suppliers
+            </Typography>
+          </Box>
+        )}
       </Box>
-    </Card>
+
+      {/* ── View Dialog ── */}
+      <ViewDialog
+        supplier={viewSupplier}
+        purchases={purchases}
+        open={Boolean(viewSupplier)}
+        onClose={() => setViewSupplier(null)}
+        onEdit={handleEdit}
+        onEditPurchase={handleEditPurchase}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title="Delete Supplier"
+        message={`Are you sure you want to delete "${confirmDelete.name}"?`}
+        confirmText="Delete"
+        danger
+        onClose={() => setConfirmDelete({ open: false, id: "", name: "" })}
+        onConfirm={handleDelete}
+      />
+    </Box>
   );
 };
 

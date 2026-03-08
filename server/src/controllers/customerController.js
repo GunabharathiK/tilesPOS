@@ -7,12 +7,7 @@ exports.createOrUpdateCustomer = async (req, res) => {
       name,
       phone,
       address,
-      accountNo,
-      ifscCode,
-      upiId,
-      accountHolder,
-      bankName,
-      branch,
+      customerType,
       amount,
       status,
       method,
@@ -26,12 +21,7 @@ exports.createOrUpdateCustomer = async (req, res) => {
       // Update details in case they changed
       customer.phone = phone || customer.phone;
       customer.address = address || customer.address;
-      customer.accountNo = accountNo || customer.accountNo;
-      customer.ifscCode = ifscCode || customer.ifscCode;
-      customer.upiId = upiId || customer.upiId;
-      customer.accountHolder = accountHolder || customer.accountHolder;
-      customer.bankName = bankName || customer.bankName;
-      customer.branch = branch || customer.branch;
+      customer.customerType = customerType || customer.customerType;
 
       if (Number(amount) > 0) {
         customer.totalSpent += Number(amount);
@@ -46,12 +36,7 @@ exports.createOrUpdateCustomer = async (req, res) => {
         name,
         phone: phone || "",
         address: address || "",
-        accountNo: accountNo || "",
-        ifscCode: ifscCode || "",
-        upiId: upiId || "",
-        accountHolder: accountHolder || "",
-        bankName: bankName || "",
-        branch: branch || "",
+        customerType: customerType || "Retail Customer",
         totalSpent: Number(amount) || 0,
         lastPurchase: new Date(),
         status: status || "Pending",

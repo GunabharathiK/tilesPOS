@@ -8,43 +8,84 @@ const calcTotalValue = (items) =>
 exports.createSupplier = async (req, res) => {
   try {
     const {
-      name, companyName, companyEmail, companyWebsite, licNo, gstin, companyPhone,
-      supplierName, supplierPhone, phone,
-      accountNo, ifscCode, upiId, accountHolder, bankName, branch,
+      // Company
+      name, companyName, companyEmail, companyWebsite,
+      companyPhone, phone, altPhone, designation, licNo, gstin,
+      // Contact
+      supplierName, supplierPhone,
+      // Address
       address, companyAddress, pincode, state, city,
+      // Products & Category
+      productsSupplied, brands,
+      // GST & Tax
+      panNumber, stateCode, registrationType,
+      // Payment & Credit
+      paymentTerms, creditLimit, discountPct, freight,
+      // Bank
+      accountNo, ifscCode, upiId, accountHolder, bankName, branch, accountType,
+      // Rating & Notes
+      rating, priority, internalNotes,
     } = req.body;
 
-    const resolvedName          = companyName    || name;
-    const resolvedCompanyPhone  = companyPhone   || phone;
-    const resolvedSupplierPhone = supplierPhone  || phone;
-    const resolvedAddress       = companyAddress || address;
+    const resolvedName         = companyName    || name;
+    const resolvedCompanyPhone = companyPhone   || phone;
+    const resolvedAddress      = companyAddress || address;
 
-    if (!resolvedName || !resolvedCompanyPhone || !resolvedAddress)
-      return res.status(400).json({ error: "Company name, phone and address are required" });
+    if (!resolvedName)
+      return res.status(400).json({ error: "Company / Supplier Name is required" });
+    if (!resolvedCompanyPhone)
+      return res.status(400).json({ error: "Primary Mobile is required" });
+    if (!resolvedAddress)
+      return res.status(400).json({ error: "Full Address is required" });
 
     const supplier = await Supplier.create({
-      name: resolvedName, companyName: resolvedName,
-      companyEmail:    companyEmail    || "",
-      companyWebsite:  companyWebsite  || "",
-      licNo:           licNo           || "",
-      gstin:           gstin           || "",
-      companyPhone:    resolvedCompanyPhone,
-      supplierName:    supplierName    || resolvedName,
-      supplierPhone:   resolvedSupplierPhone,
-      phone:           resolvedCompanyPhone,
-      accountNo:       accountNo       || "",
-      ifscCode:        ifscCode        || "",
-      upiId:           upiId           || "",
-      accountHolder:   accountHolder   || "",
-      bankName:        bankName        || "",
-      branch:          branch          || "",
-      address:         resolvedAddress,
-      companyAddress:  resolvedAddress,
-      pincode:         pincode         || "",
-      state:           state           || "",
-      city:            city            || "",
-      items: [],
-      // Payment summary fields kept for backward compat but computed dynamically
+      // backward compat
+      name:           resolvedName,
+      phone:          resolvedCompanyPhone,
+      address:        resolvedAddress,
+      // company
+      companyName:    resolvedName,
+      companyEmail:   companyEmail    || "",
+      companyWebsite: companyWebsite  || "",
+      companyPhone:   resolvedCompanyPhone,
+      altPhone:       altPhone        || "",
+      designation:    designation     || "",
+      licNo:          licNo           || "",
+      gstin:          gstin           || "",
+      // contact
+      supplierName:   supplierName    || resolvedName,
+      supplierPhone:  supplierPhone   || "",
+      // address
+      companyAddress: resolvedAddress,
+      pincode:        pincode         || "",
+      state:          state           || "",
+      city:           city            || "",
+      // products
+      productsSupplied: Array.isArray(productsSupplied) ? productsSupplied : [],
+      brands:           brands        || "",
+      // tax
+      panNumber:        panNumber        || "",
+      stateCode:        stateCode        || "",
+      registrationType: registrationType || "Regular (GST)",
+      // payment terms
+      paymentTerms:  paymentTerms     || "Net 30 Days",
+      creditLimit:   Number(creditLimit) || 0,
+      discountPct:   Number(discountPct) || 0,
+      freight:       freight          || "Supplier Pays (Free Delivery)",
+      // bank
+      bankName:      bankName         || "",
+      accountNo:     accountNo        || "",
+      ifscCode:      ifscCode         || "",
+      accountHolder: accountHolder    || "",
+      branch:        branch           || "",
+      accountType:   accountType      || "Current Account",
+      upiId:         upiId            || "",
+      // rating
+      rating:        rating           || "⭐⭐⭐⭐⭐ Excellent",
+      priority:      priority         || "Primary Supplier",
+      internalNotes: internalNotes    || "",
+      // payment defaults
+      items:         [],
       totalValue:    0,
       totalPaid:     0,
       totalDue:      0,
@@ -57,19 +98,22 @@ exports.createSupplier = async (req, res) => {
   }
 };
 
-// ── GET ALL — aggregates payment totals from Purchase collection ──
+// ── GET ALL — enriched with live purchase totals ─────────────
 exports.getSuppliers = async (req, res) => {
   try {
     const suppliers = await Supplier.find().sort({ createdAt: -1 });
 
-    // Aggregate purchase totals per supplier
+    // Aggregate purchase totals per supplier from Purchase collection
     const purchaseSummary = await Purchase.aggregate([
       {
+        $match: { isDraft: { $ne: true } },
+      },
+      {
         $group: {
-          _id:         "$supplierId",
-          totalValue:  { $sum: "$grandTotal"   },
-          totalPaid:   { $sum: "$totalPaid"    },
-          totalDue:    { $sum: "$totalDue"     },
+          _id:           "$supplierId",
+          totalValue:    { $sum: "$grandTotal"  },
+          totalPaid:     { $sum: "$totalPaid"   },
+          totalDue:      { $sum: "$totalDue"    },
           purchaseCount: { $sum: 1 },
         },
       },
@@ -81,8 +125,7 @@ exports.getSuppliers = async (req, res) => {
     const enriched = suppliers.map((s) => {
       const obj     = s.toObject();
 
-      // Sanitize: if supplierPhone is same as companyPhone (old bug), clear it
-      // so the UI never shows duplicate phone numbers
+      // Sanitize: if supplierPhone duplicates companyPhone (old data bug), clear it
       if (
         obj.supplierPhone &&
         (obj.supplierPhone === obj.companyPhone || obj.supplierPhone === obj.phone)
@@ -96,7 +139,6 @@ exports.getSuppliers = async (req, res) => {
         obj.totalPaid     = summary.totalPaid;
         obj.totalDue      = summary.totalDue;
         obj.purchaseCount = summary.purchaseCount;
-        // Derive overall payment status
         if (summary.totalDue <= 0 && summary.totalValue > 0) obj.paymentStatus = "Paid";
         else if (summary.totalPaid > 0)                      obj.paymentStatus = "Partial";
         else                                                  obj.paymentStatus = "Pending";
@@ -121,11 +163,27 @@ exports.getSupplierById = async (req, res) => {
   try {
     const supplier = await Supplier.findById(req.params.id);
     if (!supplier) return res.status(404).json({ error: "Supplier not found" });
+
     const obj = supplier.toObject();
-    // Sanitize duplicate phone on the fly (old records)
+    // Sanitize duplicate phone on the fly
     if (obj.supplierPhone && (obj.supplierPhone === obj.companyPhone || obj.supplierPhone === obj.phone)) {
       obj.supplierPhone = "";
     }
+
+    // Also enrich with live purchase totals
+    const purchases = await Purchase.find({ supplierId: req.params.id, isDraft: { $ne: true } });
+    const totalValue = purchases.reduce((s, p) => s + (p.grandTotal  || 0), 0);
+    const totalPaid  = purchases.reduce((s, p) => s + (p.totalPaid   || 0), 0);
+    const totalDue   = purchases.reduce((s, p) => s + (p.totalDue    || 0), 0);
+
+    obj.totalValue    = totalValue;
+    obj.totalPaid     = totalPaid;
+    obj.totalDue      = totalDue;
+    obj.purchaseCount = purchases.length;
+    if (totalDue <= 0 && totalValue > 0) obj.paymentStatus = "Paid";
+    else if (totalPaid > 0)              obj.paymentStatus = "Partial";
+    else                                 obj.paymentStatus = "Pending";
+
     res.json(obj);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -135,16 +193,26 @@ exports.getSupplierById = async (req, res) => {
 // ── UPDATE ───────────────────────────────────────────────────
 exports.updateSupplier = async (req, res) => {
   try {
-    const body = req.body;
-    // Sync backward-compat fields WITHOUT overwriting supplierPhone with companyPhone
+    const body = { ...req.body };
+
+    // Sync backward-compat fields
     if (!body.name && body.companyName)       body.name    = body.companyName;
     if (!body.phone && body.companyPhone)     body.phone   = body.companyPhone;
     if (!body.address && body.companyAddress) body.address = body.companyAddress;
-    // Always persist supplierPhone as-is from the form (never fall back to companyPhone)
-    if (body.supplierPhone !== undefined)     body.supplierPhone = body.supplierPhone;
+
+    // Ensure productsSupplied is an array
+    if (body.productsSupplied && !Array.isArray(body.productsSupplied)) {
+      body.productsSupplied = [body.productsSupplied];
+    }
+
+    // Convert numeric strings
+    if (body.creditLimit !== undefined) body.creditLimit = Number(body.creditLimit) || 0;
+    if (body.discountPct !== undefined) body.discountPct = Number(body.discountPct) || 0;
 
     const supplier = await Supplier.findByIdAndUpdate(
-      req.params.id, body, { new: true, runValidators: true }
+      req.params.id,
+      body,
+      { new: true, runValidators: true }
     );
     if (!supplier) return res.status(404).json({ error: "Supplier not found" });
     res.json(supplier);
@@ -156,14 +224,15 @@ exports.updateSupplier = async (req, res) => {
 // ── DELETE ───────────────────────────────────────────────────
 exports.deleteSupplier = async (req, res) => {
   try {
-    await Supplier.findByIdAndDelete(req.params.id);
+    const supplier = await Supplier.findByIdAndDelete(req.params.id);
+    if (!supplier) return res.status(404).json({ error: "Supplier not found" });
     res.json({ message: "Supplier deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
-// ── UPDATE SUPPLIER PAYMENT (legacy — kept for backward compat) ──
+// ── UPDATE PAYMENT (legacy endpoint — kept for backward compat) ──
 exports.updateSupplierPayment = async (req, res) => {
   try {
     const { totalPaid, paymentStatus, paymentMode, paymentType } = req.body;
@@ -188,6 +257,7 @@ exports.updateSupplierPayment = async (req, res) => {
     if (paymentMode) supplier.paymentMode = paymentMode;
     if (paymentType) supplier.paymentType = paymentType;
     await supplier.save();
+
     res.json(supplier);
   } catch (err) {
     res.status(500).json({ error: err.message });

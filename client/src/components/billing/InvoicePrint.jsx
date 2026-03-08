@@ -9,22 +9,19 @@ const InvoicePrint = ({ data }) => {
     company = "Renix Software",
     tax = 0,
     discount = 0,
+    charges = {},
+    notes = "",
     payment = {},
     status = "Pending",
+    documentType,
   } = data || {};
+
+  const isQuotation =
+    documentType === "quotation" || String(invoiceNo || "").toUpperCase().startsWith("QTN");
 
   const customerName = typeof customer === "object" ? customer?.name : customer;
   const customerPhone = customer?.phone || "";
   const customerAddress = customer?.address || "";
-  const customerBankName = customer?.bankName || "";
-  const customerBranch = customer?.branch || "";
-  const customerAccountHolder = customer?.accountHolder || "";
-  const customerAccountNo = customer?.accountNo || "";
-  const customerIfscCode = customer?.ifscCode || "";
-  const customerUpiId = customer?.upiId || "";
-
-  const hasBankDetails =
-    customerBankName || customerAccountNo || customerIfscCode || customerUpiId || customerBranch || customerAccountHolder;
 
   const format = JSON.parse(localStorage.getItem("billFormat")) || {};
 
@@ -33,9 +30,17 @@ const InvoicePrint = ({ data }) => {
   const itemGstAmount = items.reduce((acc, i) => acc + Number(i.gstAmount || 0), 0);
   const itemDiscountAmount = items.reduce((acc, i) => acc + Number(i.discountAmount || 0), 0);
   const subTotal = baseAmount + itemGstAmount - itemDiscountAmount;
-  const extraGstAmount = (subTotal * Number(tax || 0)) / 100;
-  const extraDiscountAmount = (subTotal * Number(discount || 0)) / 100;
-  const final = subTotal + extraGstAmount - extraDiscountAmount;
+  const transportAmount = Number(charges?.transport || 0);
+  const flatDiscountAmount = Number(charges?.extraDiscount || 0);
+  const useFlatCharges = transportAmount !== 0 || flatDiscountAmount !== 0;
+  const taxableBase = useFlatCharges ? Math.max(0, subTotal - flatDiscountAmount + transportAmount) : subTotal;
+  const extraGstAmount = (taxableBase * Number(tax || 0)) / 100;
+  const extraDiscountAmount = useFlatCharges
+    ? flatDiscountAmount
+    : (subTotal * Number(discount || 0)) / 100;
+  const final = useFlatCharges
+    ? taxableBase + extraGstAmount
+    : subTotal + extraGstAmount - extraDiscountAmount;
 
   const paidAmountRaw = Number(payment?.paidAmount);
   const dueAmountRaw = Number(payment?.dueAmount);
@@ -59,7 +64,7 @@ const InvoicePrint = ({ data }) => {
       }}
     >
       <Typography variant="h3" fontWeight="bold" sx={{ lineHeight: 1, mb: 2.2 }}>
-        INVOICE
+        {isQuotation ? "QUOTATION" : "INVOICE"}
       </Typography>
 
       <Box
@@ -101,21 +106,9 @@ const InvoicePrint = ({ data }) => {
       </Box>
 
       <Box sx={{ display: "flex", justifyContent: "space-between", mt: 1.5, alignItems: "flex-start" }}>
-        <Box>
-          {hasBankDetails && (
-            <Box sx={{ mt: 0.2 }}>
-              <Typography fontWeight={700} fontSize={14} mb={0.35}>Bank Details</Typography>
-              {customerBankName && <Typography fontSize={13}>Bank: {customerBankName}</Typography>}
-              {customerBranch && <Typography fontSize={13}>Branch: {customerBranch}</Typography>}
-              {customerAccountHolder && <Typography fontSize={13}>A/C Name: {customerAccountHolder}</Typography>}
-              {customerAccountNo && <Typography fontSize={13}>A/C No: {customerAccountNo}</Typography>}
-              {customerIfscCode && <Typography fontSize={13}>IFSC: {customerIfscCode}</Typography>}
-              {customerUpiId && <Typography fontSize={13}>UPI: {customerUpiId}</Typography>}
-            </Box>
-          )}
-        </Box>
+        <Box />
         <Box textAlign="right">
-          <Typography>Invoice No: {invoiceNo}</Typography>
+          <Typography>{isQuotation ? "Quotation No" : "Invoice No"}: {invoiceNo}</Typography>
           <Typography>Date: {date?.split(" ")[0]}</Typography>
           <Typography>Time: {date?.split(" ").slice(1).join(" ")}</Typography>
         </Box>
@@ -160,6 +153,12 @@ const InvoicePrint = ({ data }) => {
 
       <Box sx={{ mt: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 3 }}>
         <Box sx={{ width: 320, pt: 0.5 }}>
+          {notes ? (
+            <Box sx={{ mb: 2 }}>
+              <Typography fontWeight={700} mb={0.6}>Notes</Typography>
+              <Typography fontSize={13}>{notes}</Typography>
+            </Box>
+          ) : null}
           <Typography fontWeight={700} mb={3}>Company Seal</Typography>
           <Box sx={{ height: 70 }} />
           <Box sx={{ borderBottom: "1px dashed #9ca3af" }} />
@@ -177,12 +176,22 @@ const InvoicePrint = ({ data }) => {
               {[
                 ["Total Items", totalItems],
                 ["Total Initial Amount", `Rs.${baseAmount.toFixed(2)}`],
+                ...(useFlatCharges ? [["Transport", `Rs.${transportAmount.toFixed(2)}`]] : []),
                 [`Overall GST (${Number(tax) || 0}%)`, `Rs.${extraGstAmount.toFixed(2)}`],
-                [`Overall Discount (${Number(discount) || 0}%)`, `Rs.${extraDiscountAmount.toFixed(2)}`],
+                [
+                  useFlatCharges ? "Extra Discount" : `Overall Discount (${Number(discount) || 0}%)`,
+                  `Rs.${extraDiscountAmount.toFixed(2)}`,
+                ],
                 ["Final Amount", `Rs.${final.toFixed(2)}`],
-                ["Paid Amount", `Rs.${paidAmount.toFixed(2)}`],
-                ["Pending Amount", `Rs.${pendingAmount.toFixed(2)}`],
-                ["Status", status || "Pending"],
+                ...(
+                  isQuotation
+                    ? []
+                    : [
+                        ["Paid Amount", `Rs.${paidAmount.toFixed(2)}`],
+                        ["Pending Amount", `Rs.${pendingAmount.toFixed(2)}`],
+                        ["Status", status || "Pending"],
+                      ]
+                ),
               ].map(([label, value]) => (
                 <Box component="tr" key={label} sx={{ borderBottom: "1px dashed #e2e8f0" }}>
                   <Box component="td" sx={{ py: 0.7, color: "text.secondary" }}>{label}</Box>

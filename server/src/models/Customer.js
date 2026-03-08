@@ -6,13 +6,7 @@ const customerSchema = new mongoose.Schema(
     name: { type: String, default: "" },
     phone: { type: String, default: "" },
     address: { type: String, default: "" },
-    accountNo: { type: String, default: "" },
-    ifscCode: { type: String, default: "" },
-    upiId: { type: String, default: "" },
-    accountHolder: { type: String, default: "" },
-    bankName: { type: String, default: "" },
-    branch: { type: String, default: "" },
-
+    customerType: { type: String, default: "Retail Customer" },
     totalSpent: { type: Number, default: 0 },
     lastPurchase: Date,
 
