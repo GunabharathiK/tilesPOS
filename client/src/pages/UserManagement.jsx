@@ -20,6 +20,8 @@ import {
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import toast from "react-hot-toast";
@@ -30,6 +32,9 @@ const UserManagement = ({ embedded = false }) => {
   const [openDialog, setOpenDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [dialogMode, setDialogMode] = useState("add");
+  const [editingUser, setEditingUser] = useState(null);
+  const [deletingUser, setDeletingUser] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -58,12 +63,29 @@ const UserManagement = ({ embedded = false }) => {
   };
 
   const openAddDialog = () => {
+    setDialogMode("add");
+    setEditingUser(null);
     resetForm();
+    setOpenDialog(true);
+  };
+
+  const openEditDialog = (user) => {
+    setDialogMode("edit");
+    setEditingUser(user);
+    setForm({
+      name: user?.name || "",
+      phone: user?.phone || "",
+      password: "",
+      role: String(user?.role || "").toLowerCase() === "admin" ? "admin" : "staff",
+    });
+    setShowPassword(false);
+    setError("");
     setOpenDialog(true);
   };
 
   const closeAddDialog = () => {
     setOpenDialog(false);
+    setEditingUser(null);
   };
 
   const handleChange = (e) => {
@@ -74,15 +96,16 @@ const UserManagement = ({ embedded = false }) => {
   };
 
   const handleSubmit = async () => {
-    if (!form.name.trim() || !form.phone.trim() || !form.password.trim()) {
-      setError("Name, mobile and password are required");
+    const isEdit = dialogMode === "edit";
+    if (!form.name.trim() || !form.phone.trim() || (!isEdit && !form.password.trim())) {
+      setError(isEdit ? "Name and mobile are required" : "Name, mobile and password are required");
       return;
     }
     if (form.phone.length !== 10) {
       setError("Mobile number must be 10 digits");
       return;
     }
-    if (form.password.length < 6) {
+    if (form.password && form.password.length < 6) {
       setError("Password must be at least 6 characters");
       return;
     }
@@ -93,13 +116,26 @@ const UserManagement = ({ embedded = false }) => {
 
     setLoading(true);
     try {
-      await API.post("/auth/register", {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        password: form.password,
-        role: form.role,
-      });
-      toast.success("Staff added");
+      if (isEdit) {
+        const payload = {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          role: form.role,
+        };
+        if (form.password.trim()) {
+          payload.password = form.password;
+        }
+        await API.put(`/auth/users/${editingUser?._id}`, payload);
+        toast.success("User updated");
+      } else {
+        await API.post("/auth/register", {
+          name: form.name.trim(),
+          phone: form.phone.trim(),
+          password: form.password,
+          role: form.role,
+        });
+        toast.success("Staff added");
+      }
       closeAddDialog();
       fetchUsers();
     } catch (err) {
@@ -107,6 +143,33 @@ const UserManagement = ({ embedded = false }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deletingUser?._id) return;
+    setLoading(true);
+    try {
+      await API.delete(`/auth/users/${deletingUser._id}`);
+      toast.success("User deleted");
+      setDeletingUser(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to delete user");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const adminCount = users.filter((u) => String(u?.role || "").toLowerCase() === "admin").length;
+  const isOnlyAdmin = (user) =>
+    String(user?.role || "").toLowerCase() === "admin" && adminCount <= 1;
+
+  const handleDeleteClick = (user) => {
+    if (isOnlyAdmin(user)) {
+      toast.error("At least one admin account is required");
+      return;
+    }
+    setDeletingUser(user);
   };
 
   const roleChipSx = (role) => {
@@ -153,7 +216,7 @@ const UserManagement = ({ embedded = false }) => {
           <Table size="small">
             <TableHead>
               <TableRow sx={{ background: "#f8fafc" }}>
-                {["Name", "Role", "Mobile", "Status"].map((head) => (
+                {["Name", "Role", "Mobile", "Actions"].map((head) => (
                   <TableCell
                     key={head}
                     sx={{
@@ -192,20 +255,38 @@ const UserManagement = ({ embedded = false }) => {
                   <TableCell sx={{ fontSize: 13, color: "#4a5568", py: 1.1 }}>
                     {u.phone || "-"}
                   </TableCell>
-                  <TableCell sx={{ py: 1.1 }}>
-                    <Chip
-                      label="Active"
-                      size="small"
-                      sx={{
-                        fontWeight: 700,
-                        fontSize: 11,
-                        height: 26,
-                        color: "#1a7a4a",
-                        border: "1px solid #b8dfca",
-                        background: "#ecf9f1",
-                        borderRadius: "999px",
-                      }}
-                    />
+                  <TableCell sx={{ py: 1.1, minWidth: 126 }}>
+                    <Box sx={{ display: "flex", gap: 0.8 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => openEditDialog(u)}
+                        startIcon={<EditOutlinedIcon sx={{ fontSize: 15 }} />}
+                        sx={{ textTransform: "none", borderRadius: "8px", fontSize: 11, px: 0.8, py: 0.2, minWidth: "auto" }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        aria-disabled={isOnlyAdmin(u)}
+                        onClick={() => handleDeleteClick(u)}
+                        startIcon={<DeleteOutlineIcon sx={{ fontSize: 15 }} />}
+                        sx={{
+                          textTransform: "none",
+                          borderRadius: "8px",
+                          fontSize: 11,
+                          px: 0.8,
+                          py: 0.2,
+                          minWidth: "auto",
+                          opacity: isOnlyAdmin(u) ? 0.45 : 1,
+                          cursor: isOnlyAdmin(u) ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -241,7 +322,9 @@ const UserManagement = ({ embedded = false }) => {
       </Box>
 
       <Dialog open={openDialog} onClose={closeAddDialog} fullWidth maxWidth="xs">
-        <DialogTitle sx={{ fontWeight: 800, fontSize: 18, color: "#1c2333" }}>Add Staff</DialogTitle>
+        <DialogTitle sx={{ fontWeight: 800, fontSize: 18, color: "#1c2333" }}>
+          {dialogMode === "edit" ? "Edit User" : "Add Staff"}
+        </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           {error ? (
             <Alert severity="error" sx={{ mb: 1.5 }}>
@@ -268,7 +351,7 @@ const UserManagement = ({ embedded = false }) => {
               fullWidth
             />
             <TextField
-              label="Password"
+              label={dialogMode === "edit" ? "New Password (optional)" : "Password"}
               name="password"
               type={showPassword ? "text" : "password"}
               size="small"
@@ -314,7 +397,30 @@ const UserManagement = ({ embedded = false }) => {
               "&:hover": { background: "#0f3d7a" },
             }}
           >
-            {loading ? "Saving..." : "Add Staff"}
+            {loading ? "Saving..." : dialogMode === "edit" ? "Save Changes" : "Add Staff"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deletingUser} onClose={() => setDeletingUser(null)} fullWidth maxWidth="xs">
+        <DialogTitle sx={{ fontWeight: 800, fontSize: 18, color: "#1c2333" }}>Delete User</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography sx={{ fontSize: 14, color: "#475569" }}>
+            Are you sure you want to delete {deletingUser?.name || "this user"}?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeletingUser(null)} sx={{ textTransform: "none" }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteUser}
+            disabled={loading}
+            color="error"
+            variant="contained"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            {loading ? "Deleting..." : "Delete"}
           </Button>
         </DialogActions>
       </Dialog>

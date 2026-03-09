@@ -5,6 +5,7 @@ const {
   register,
   getMe,
   getUsers,
+  updateUser,
   deleteUser,
   requestAdminForgotPasswordOtp,
   resetAdminPasswordWithOtp,
@@ -22,6 +23,7 @@ router.get("/me", protect, getMe);
 // Admin only
 router.post("/register", protect, adminOnly, register);
 router.get("/users", protect, adminOnly, getUsers);
+router.put("/users/:id", protect, adminOnly, updateUser);
 router.delete("/users/:id", protect, adminOnly, deleteUser);
 
 module.exports = router;

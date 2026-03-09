@@ -57,6 +57,7 @@ exports.createInvoice = async (req, res) => {
     const normalizedItems = rawItems.map((item) => {
       const product = productMap.get(String(item.productId || ""));
       const quantity = Number(item?.quantity) || 0;
+      const boxes = Number(item?.boxes) || 0;
       const gst = Number(item?.gst) || 0;
       const discount = Number(item?.discount) || 0;
       const price = product ? getPriceByCustomerType(product, customerType) : (Number(item?.price) || 0);
@@ -69,6 +70,7 @@ exports.createInvoice = async (req, res) => {
       return {
         ...item,
         quantity: round2(quantity),
+        boxes: round2(boxes),
         price: round2(price),
         gst,
         discount,
@@ -85,7 +87,14 @@ exports.createInvoice = async (req, res) => {
     const loadingCharge = round2(Number(body?.charges?.loading) || Number(body?.charges?.loadingCharge) || 0);
     const transportCharge = round2(Number(body?.charges?.transport) || 0);
     const extraDiscount = round2(Number(body?.charges?.extraDiscount) || 0);
-    const taxableBase = round2(Math.max(0, itemSubTotal - discountPercentAmount - extraDiscount + loadingCharge + transportCharge));
+    const customerTypeDiscount = round2(Number(body?.charges?.customerTypeDiscount) || 0);
+    const customerTypeDiscountPct = Number(body?.charges?.customerTypeDiscountPct) || 0;
+    const taxableBase = round2(
+      Math.max(
+        0,
+        itemSubTotal - discountPercentAmount - extraDiscount - customerTypeDiscount + loadingCharge + transportCharge
+      )
+    );
     const tax = Number(body.tax) || 0;
     const taxAmount = round2((taxableBase * tax) / 100);
     const totalAmount = round2(taxableBase + taxAmount);
@@ -114,12 +123,14 @@ exports.createInvoice = async (req, res) => {
     body.saleType = customerType;
     body.items = normalizedItems;
     body.taxAmount = taxAmount;
-    body.discountAmount = round2(itemDiscountTotal + discountPercentAmount + extraDiscount);
+    body.discountAmount = round2(itemDiscountTotal + discountPercentAmount + extraDiscount + customerTypeDiscount);
     body.charges = {
       ...(body.charges || {}),
       loading: loadingCharge,
       transport: transportCharge,
       extraDiscount,
+      customerTypeDiscount,
+      customerTypeDiscountPct,
     };
 
     body.payment = {

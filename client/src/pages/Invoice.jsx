@@ -62,7 +62,9 @@ const emptyItem = {
   code: "",
   name: "",
   category: "",
+  brand: "",
   finish: "",
+  colorDesign: "",
   quantity: "",
   boxes: "",
   size: "",
@@ -142,15 +144,17 @@ const fieldLabelSx = {
 // ── Quotation table column definitions ─────────────────────────────────────
 // Total = 100%. Each col has: key, header label, width%, align, inputType
 const QTN_COLS = [
-  { key: "product",  label: "Tile / Product", w: "21%", minW: 260, align: "left" },
-  { key: "category", label: "Category",       w: "13%", minW: 130, align: "left" },
-  { key: "finish",   label: "Finish",         w: "11%", minW: 110, align: "left" },
-  { key: "qty",      label: "Qty (sqft)",     w: "10%", minW: 100, align: "right" },
-  { key: "boxes",    label: "Boxes",          w: "10%", minW: 90, align: "right" },
-  { key: "rate",     label: "Rate/sqft",      w: "11%", minW: 110, align: "right" },
-  { key: "disc",     label: "Disc %",         w:  "8%", minW: 80, align: "right" },
-  { key: "amount",   label: "Amount (Rs)",    w: "12%", minW: 130, align: "right" },
-  { key: "action",   label: "",               w:  "4%", minW: 74, align: "center" },
+  { key: "product",     label: "Tile / Product", w: "18%", minW: 240, align: "left" },
+  { key: "category",    label: "Category",       w: "10%", minW: 120, align: "left" },
+  { key: "brand",       label: "Brand",          w:  "9%", minW: 110, align: "left" },
+  { key: "finish",      label: "Finish",         w:  "9%", minW: 110, align: "left" },
+  { key: "colorDesign", label: "Color/Design",   w: "10%", minW: 130, align: "left" },
+  { key: "qty",         label: "Qty (sqft)",     w:  "8%", minW: 95, align: "left" },
+  { key: "boxes",       label: "Boxes",          w:  "8%", minW: 90, align: "left" },
+  { key: "rate",        label: "Rate/sqft",      w:  "9%", minW: 105, align: "left" },
+  { key: "disc",        label: "Disc %",         w:  "6%", minW: 78, align: "left" },
+  { key: "amount",      label: "Amount (Rs)",    w:  "9%", minW: 120, align: "left" },
+  { key: "action",      label: "",               w:  "4%", minW: 74, align: "center" },
 ];
 
 // Shared header cell style for quotation table
@@ -205,6 +209,13 @@ const qtnInputSx = {
     margin: 0,
   },
 };
+const openWhatsAppChat = (phone, message) => {
+  const isMobile = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent || "");
+  const url = isMobile
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    : `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank");
+};
 
 const Invoice = ({ mode = "invoice" }) => {
   const location = useLocation();
@@ -217,14 +228,14 @@ const Invoice = ({ mode = "invoice" }) => {
   const [customer, setCustomer] = useState(emptyCustomer);
   const [saleType, setSaleType] = useState(CUSTOMER_TYPE_OPTIONS[0]);
   const [tax, setTax] = useState("");
-  const [discount, setDiscount] = useState("");
   const [activeIndex, setActiveIndex] = useState(null);
-  const [payment, setPayment] = useState({ method: "CASH", amount: "" });
+  const [payment, setPayment] = useState({ method: "CASH", amount: "", paidAmount: "", dueAmount: "" });
   const [invoiceData, setInvoiceData] = useState(null);
   const [isPaid, setIsPaid] = useState(false);
   const [customerLocked, setCustomerLocked] = useState(false);
   const [itemLocks, setItemLocks] = useState([]);
   const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10));
+  const [loadingCharge, setLoadingCharge] = useState("");
   const [transportCharge, setTransportCharge] = useState("");
   const [extraDiscount, setExtraDiscount] = useState("");
   const [notes, setNotes] = useState("");
@@ -267,11 +278,11 @@ const Invoice = ({ mode = "invoice" }) => {
     );
     setItemLocks(incomingItems.map(() => false));
     setTax(state.tax || "");
-    setDiscount(state.discount || "");
+    setLoadingCharge(state?.charges?.loading ? String(state.charges.loading) : "");
     setTransportCharge(state?.charges?.transport ? String(state.charges.transport) : "");
     setExtraDiscount(state?.charges?.extraDiscount ? String(state.charges.extraDiscount) : "");
     setNotes(state?.notes || "");
-    setPayment(state.payment || { method: "CASH", amount: "" });
+    setPayment(state.payment || { method: "CASH", amount: "", paidAmount: "", dueAmount: "" });
     setIsPaid(state.status === "Paid");
     if (state.date) {
       const parsed = new Date(state.date);
@@ -302,7 +313,9 @@ const Invoice = ({ mode = "invoice" }) => {
         name: selected?.name || "",
         code: selected?.code || "",
         category: selected?.category || "",
+        brand: selected?.brand || "",
         finish: selected?.finish || "",
+        colorDesign: selected?.colorDesign || "",
         size: selected?.size || "",
         uom: selected?.uom || "",
         availableStock: selected?.stock ?? null,
@@ -386,12 +399,28 @@ const Invoice = ({ mode = "invoice" }) => {
   };
 
   const total = useMemo(() => items.reduce((acc, item) => acc + (Number(item.total) || 0), 0), [items]);
-  const transportAmount = isQuotation ? Number(transportCharge) || 0 : 0;
-  const extraDiscountAmount = isQuotation ? Number(extraDiscount) || 0 : 0;
-  const taxableBase = isQuotation ? Math.max(0, total - extraDiscountAmount + transportAmount) : total;
+  const loadingAmount = Number(loadingCharge) || 0;
+  const transportAmount = Number(transportCharge) || 0;
+  const extraDiscountAmount = Number(extraDiscount) || 0;
+  const customerTypeDiscountPct = 0;
+  const customerTypeDiscountAmount = (total * customerTypeDiscountPct) / 100;
+  const taxableBase = Math.max(0, total - extraDiscountAmount - customerTypeDiscountAmount + loadingAmount + transportAmount);
   const taxAmount = (taxableBase * (Number(tax) || 0)) / 100;
-  const discountAmount = isQuotation ? extraDiscountAmount : (total * (Number(discount) || 0)) / 100;
-  const finalAmount = isQuotation ? taxableBase + taxAmount : total + taxAmount - discountAmount;
+  const discountAmount = isQuotation ? extraDiscountAmount : 0;
+  const finalAmount = taxableBase + taxAmount;
+  const rawAdvanceReceived = Number(payment?.paidAmount);
+  const advanceReceived = Number.isFinite(rawAdvanceReceived) ? Math.min(Math.max(0, rawAdvanceReceived), finalAmount) : 0;
+  const pendingAmount = Math.max(0, finalAmount - advanceReceived);
+  const invoiceStatus = isQuotation ? "Pending" : (pendingAmount <= 0 ? "Paid" : advanceReceived > 0 ? "Partial" : "Pending");
+  const itemDiscountTotal = useMemo(
+    () => items.reduce((acc, item) => {
+      const qty = Number(item.quantity) || 0;
+      const price = Number(item.price) || 0;
+      const itemDiscount = Number(item.discount) || 0;
+      return acc + (qty * price * itemDiscount) / 100;
+    }, 0),
+    [items]
+  );
   const totalItemsCount = useMemo(() => items.reduce((acc, item) => acc + (Number(item.quantity) || 0), 0), [items]);
   const calculatorResult = useMemo(() => {
     const length = Number(calculator.length) || 0;
@@ -405,6 +434,9 @@ const Invoice = ({ mode = "invoice" }) => {
   }, [calculator]);
 
   useEffect(() => { setPayment((prev) => ({ ...prev, amount: finalAmount })); }, [finalAmount]);
+  useEffect(() => {
+    setPayment((prev) => ({ ...prev, dueAmount: pendingAmount }));
+  }, [pendingAmount]);
 
   useEffect(() => {
     setItems((prev) => {
@@ -448,13 +480,13 @@ const Invoice = ({ mode = "invoice" }) => {
       customer: { ...customer, customerType: saleType, saleType },
       customerType: saleType, saleType, items,
       tax: Number(tax) || 0,
-      discount: isQuotation ? 0 : Number(discount) || 0,
+      discount: isQuotation ? 0 : 0,
       taxAmount, discountAmount,
-      charges: isQuotation ? { transport: transportAmount, extraDiscount: extraDiscountAmount } : undefined,
+      charges: { loading: loadingAmount, transport: transportAmount, extraDiscount: extraDiscountAmount, customerTypeDiscount: customerTypeDiscountAmount, customerTypeDiscountPct },
       notes,
-      payment: isQuotation ? {} : payment,
+      payment: isQuotation ? {} : { ...payment, paidAmount: advanceReceived, dueAmount: pendingAmount },
       reduceStockNow: isQuotation ? false : undefined,
-      status: "Pending",
+      status: invoiceStatus,
       invoiceNo: generateInvoiceNo(),
       date: new Date(`${billDate}T${new Date().toTimeString().slice(0, 8)}`).toLocaleString(),
       documentType: isQuotation ? "quotation" : "invoice",
@@ -474,41 +506,98 @@ const Invoice = ({ mode = "invoice" }) => {
 
   const updateStatus = async (paid) => {
     try {
-      await API.put(`/invoices/${invoiceData._id}`, { status: paid ? "Paid" : "Pending" });
+      const nextPayment = {
+        ...(invoiceData?.payment || {}),
+        amount: finalAmount,
+        paidAmount: paid ? finalAmount : 0,
+        dueAmount: paid ? 0 : finalAmount,
+      };
+      await API.put(`/invoices/${invoiceData._id}`, { status: paid ? "Paid" : "Pending", payment: nextPayment });
+      setInvoiceData((prev) => prev ? ({ ...prev, status: paid ? "Paid" : "Pending", payment: nextPayment }) : prev);
       setIsPaid(paid);
       toast.success("Status updated");
     } catch { toast.error("Update failed"); }
   };
 
-  const handleDownload = async () => {
-    if (!invoiceData) return;
+  const buildInvoicePdf = async () => {
     const element = document.getElementById("invoice-preview");
-    if (!element) return;
+    if (!element || !invoiceData) return null;
     const canvas = await html2canvas(element, { scale: 2 });
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF("p", "mm", "a4");
     const imgWidth = 210;
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
-    pdf.save(`${isQuotation ? "Quotation" : "Invoice"}-${invoiceData.invoiceNo}.pdf`);
+    const fileName = `${isQuotation ? "Quotation" : "Invoice"}-${invoiceData.invoiceNo}.pdf`;
+    return { pdf, fileName };
+  };
+
+  const handleDownload = async () => {
+    if (!invoiceData) return;
+    const pdfDoc = await buildInvoicePdf();
+    if (!pdfDoc) return;
+    pdfDoc.pdf.save(pdfDoc.fileName);
   };
 
   const handlePrint = () => window.print();
 
-  const handleWhatsapp = () => {
+  const handleWhatsapp = async () => {
     if (!invoiceData) { toast.error(isQuotation ? "Generate quotation first" : "Generate invoice first"); return; }
     const rawPhone = customer.phone || "";
     const toDigits = rawPhone.replace(/\D/g, "");
     if (!toDigits) { toast.error("Customer phone number is required for WhatsApp"); return; }
     const phone = toDigits.length === 10 ? `91${toDigits}` : toDigits;
+    const messageRows = isQuotation
+      ? [
+          `Sub Total: Rs.${fmt(total)}`,
+          `Special Discount: Rs.${fmt(extraDiscountAmount)}`,
+          `Transport: Rs.${fmt(transportAmount)}`,
+          `GST (${Number(tax) || 0}%): Rs.${fmt(taxAmount)}`,
+          `Total: Rs.${fmt(finalAmount)}`,
+        ]
+      : [
+          `Subtotal: Rs.${fmt(total)}`,
+          `Item Discounts: Rs.${fmt(itemDiscountTotal)}`,
+          `Loading Charges: Rs.${fmt(loadingAmount)}`,
+          `Special Discount: Rs.${fmt(extraDiscountAmount)}`,
+          `Customer Type Discount (${fmt(customerTypeDiscountPct)}%): Rs.${fmt(customerTypeDiscountAmount)}`,
+          `Transport: Rs.${fmt(transportAmount)}`,
+          `GST (${Number(tax) || 0}%): Rs.${fmt(taxAmount)}`,
+          `Total: Rs.${fmt(finalAmount)}`,
+          `Advance Received: Rs.${fmt(advanceReceived)}`,
+          `Pending Amount: Rs.${fmt(pendingAmount)}`,
+        ];
     const message = [
       `Hello ${customer.name || "Customer"},`,
       `Your ${isQuotation ? "quotation" : "invoice"} is ready.`,
       `${isQuotation ? "Quotation" : "Invoice"} No: ${invoiceData.invoiceNo}`,
-      `Total: Rs.${fmt(finalAmount)}`,
+      ...messageRows,
       `Date: ${billDate}`,
     ].join("\n");
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank");
+    try {
+      const pdfDoc = await buildInvoicePdf();
+      if (!pdfDoc) {
+        openWhatsAppChat(phone, message);
+        return;
+      }
+
+      const pdfBlob = pdfDoc.pdf.output("blob");
+      const pdfFile = new File([pdfBlob], pdfDoc.fileName, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
+        await navigator.share({
+          title: pdfDoc.fileName,
+          text: message,
+          files: [pdfFile],
+        });
+        return;
+      }
+
+      pdfDoc.pdf.save(pdfDoc.fileName);
+      openWhatsAppChat(phone, message);
+      toast.success("PDF downloaded. Please attach it in WhatsApp.");
+    } catch {
+      openWhatsAppChat(phone, message);
+    }
   };
 
   const handleDone = () => {
@@ -516,8 +605,8 @@ const Invoice = ({ mode = "invoice" }) => {
     setSaleType("Customer");
     setItems([]);
     setItemLocks([]);
-    setTax(""); setDiscount(""); setTransportCharge(""); setExtraDiscount(""); setNotes("");
-    setPayment({ method: "CASH", amount: "" });
+    setTax(""); setLoadingCharge(""); setTransportCharge(""); setExtraDiscount(""); setNotes("");
+    setPayment({ method: "CASH", amount: "", paidAmount: "", dueAmount: "" });
     setInvoiceData(null); setIsPaid(false); setCustomerLocked(false);
     setBillDate(new Date().toISOString().slice(0, 10));
     toast.success("Done");
@@ -529,17 +618,23 @@ const Invoice = ({ mode = "invoice" }) => {
       ? [
           ["Total Qty",      fmt(totalItemsCount)],
           ["Sub Total",      `Rs.${fmt(total)}`],
+          ["Loading Charges", `Rs.${fmt(loadingAmount)}`],
           ["Extra Discount", `Rs.${fmt(extraDiscountAmount)}`],
           ["Transport",      `Rs.${fmt(transportAmount)}`],
           [`GST (${Number(tax) || 0}%)`, `Rs.${fmt(taxAmount)}`],
           ["Final Amount",   `Rs.${fmt(finalAmount)}`],
         ]
       : [
-          ["Total Qty",   fmt(totalItemsCount)],
-          ["Sub Total",   `Rs.${fmt(total)}`],
-          [`Tax (${Number(tax) || 0}%)`,      `Rs.${fmt(taxAmount)}`],
-          [`Discount (${Number(discount) || 0}%)`, `Rs.${fmt(discountAmount)}`],
-          ["Final Amount", `Rs.${fmt(finalAmount)}`],
+          ["Subtotal", `Rs.${fmt(total)}`],
+          ["Item Discounts", `Rs.${fmt(itemDiscountTotal)}`],
+          ["Loading Charges", `Rs.${fmt(loadingAmount)}`],
+          ["Special Discount", `Rs.${fmt(extraDiscountAmount)}`],
+          [`Customer Type Discount (${fmt(customerTypeDiscountPct)}%)`, `Rs.${fmt(customerTypeDiscountAmount)}`],
+          ["Transport", `Rs.${fmt(transportAmount)}`],
+          [`GST (${Number(tax) || 0}%)`, `Rs.${fmt(taxAmount)}`],
+          ["Total", `Rs.${fmt(finalAmount)}`],
+          ["Advance Received", `Rs.${fmt(advanceReceived)}`],
+          ["Pending Amount", `Rs.${fmt(pendingAmount)}`],
         ]),
   ];
 
@@ -701,43 +796,53 @@ const Invoice = ({ mode = "invoice" }) => {
                   )}
                 </TableCell>
 
-                {/* ── Col 2: Category ── */}
+                {/* Col 2: Category */}
                 <TableCell sx={qtnBodyCellSx(QTN_COLS[1], locked)}>
                   <TextField size="small" fullWidth value={item.category || ""} disabled={locked}
                     onChange={(e) => handleItemChange(index, "category", e.target.value)} sx={qtnInputSx} />
                 </TableCell>
 
-                {/* ── Col 3: Finish ── */}
+                {/* Col 3: Brand */}
                 <TableCell sx={qtnBodyCellSx(QTN_COLS[2], locked)}>
+                  <TextField size="small" fullWidth value={item.brand || ""} disabled sx={qtnInputSx} />
+                </TableCell>
+
+                {/* Col 4: Finish */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[3], locked)}>
                   <TextField size="small" fullWidth value={item.finish || ""} disabled={locked}
                     onChange={(e) => handleItemChange(index, "finish", e.target.value)} sx={qtnInputSx} />
                 </TableCell>
 
-                {/* ── Col 4: Qty (sqft) ── */}
-                <TableCell sx={qtnBodyCellSx(QTN_COLS[3], locked)}>
+                {/* Col 5: Color/Design */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[4], locked)}>
+                  <TextField size="small" fullWidth value={item.colorDesign || ""} disabled sx={qtnInputSx} />
+                </TableCell>
+
+                {/* Col 6: Qty (sqft) */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[5], locked)}>
                   <TextField size="small" fullWidth type="number"
                     value={item.quantity} disabled={locked}
                     onChange={(e) => handleItemChange(index, "quantity", e.target.value)}
                     inputProps={{ min: 0, step: "0.01" }} sx={qtnInputSx} />
                 </TableCell>
 
-                {/* ── Col 5: Boxes ── */}
-                <TableCell sx={qtnBodyCellSx(QTN_COLS[4], locked)}>
+                {/* Col 7: Boxes */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[6], locked)}>
                   <TextField size="small" fullWidth type="number"
                     value={boxes} disabled={locked}
                     onChange={(e) => handleItemChange(index, "boxes", e.target.value)}
                     inputProps={{ min: 0, step: "0.01" }} sx={qtnInputSx} />
                 </TableCell>
 
-                {/* ── Col 6: Rate ── */}
-                <TableCell sx={qtnBodyCellSx(QTN_COLS[5], locked)}>
+                {/* Col 8: Rate */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[7], locked)}>
                   <TextField size="small" fullWidth
                     value={item.productId ? fmt(item.price) : ""}
                     disabled sx={qtnInputSx} />
                 </TableCell>
 
-                {/* ── Col 7: Disc % ── */}
-                <TableCell sx={qtnBodyCellSx(QTN_COLS[6], locked)}>
+                {/* Col 9: Disc % */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[8], locked)}>
                   <TextField
                     size="small"
                     fullWidth
@@ -750,8 +855,8 @@ const Invoice = ({ mode = "invoice" }) => {
                   />
                 </TableCell>
 
-                {/* ── Col 8: Amount ── */}
-                <TableCell sx={qtnBodyCellSx(QTN_COLS[7], locked)}>
+                {/* Col 10: Amount */}
+                <TableCell sx={qtnBodyCellSx(QTN_COLS[9], locked)}>
                   <TextField size="small" fullWidth
                     value={item.productId ? fmt(item.total) : ""}
                     disabled sx={{
@@ -759,13 +864,13 @@ const Invoice = ({ mode = "invoice" }) => {
                       "& .MuiOutlinedInput-root": {
                         ...qtnInputSx["& .MuiOutlinedInput-root"],
                         fontWeight: 700,
-                        "& input": { fontWeight: 700, color: "#0f172a", textAlign: "right" },
+                        "& input": { fontWeight: 700, color: "#0f172a" },
                       },
                     }} />
                 </TableCell>
 
-                {/* ── Col 9: Actions ── */}
-                <TableCell sx={{ ...qtnBodyCellSx(QTN_COLS[8], locked), px: 0.4 }}>
+                {/* Col 11: Actions */}
+                <TableCell sx={{ ...qtnBodyCellSx(QTN_COLS[10], locked), px: 0.4 }}>
                   <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 0.2 }}>
                     <IconButton
                       size="small"
@@ -901,7 +1006,7 @@ const Invoice = ({ mode = "invoice" }) => {
         </Typography>
       </Box>
 
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1.9fr) minmax(300px, 0.72fr)" }, gap: 2.2, alignItems: "start" }}>
+      <Box sx={{ display: "grid", gridTemplateColumns: isQuotation ? "1fr" : { xs: "1fr", xl: "minmax(0, 1.9fr) minmax(300px, 0.72fr)" }, gap: 2.2, alignItems: "start" }}>
         <Box>
           {/* Customer card */}
           <Card sx={sectionCardSx}>
@@ -960,12 +1065,107 @@ const Invoice = ({ mode = "invoice" }) => {
             </Box>
           </Card>
 
+          {isQuotation && (
+            <Box sx={{ mt: 2.2, display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1.9fr) minmax(300px, 0.85fr)" }, gap: 2.2, alignItems: "start" }}>
+              <Box>
+                <Card sx={sectionCardSx}>
+                  <Box sx={cardHeaderSx}>
+                    <Typography sx={panelTitleSx}>Charges</Typography>
+                  </Box>
+                  <Box sx={{ p: 2.2, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+                    <Box>
+                      <Typography sx={fieldLabelSx}>GST Rate</Typography>
+                      <TextField select size="small" fullWidth value={tax} onChange={(e) => setTax(e.target.value)} sx={inputSx}>
+                        {[0, 5, 12, 18].map((rate) => <MenuItem key={rate} value={String(rate)}>{rate}% GST</MenuItem>)}
+                      </TextField>
+                    </Box>
+                    <Box>
+                      <Typography sx={fieldLabelSx}>Loading Charges (Rs)</Typography>
+                      <TextField size="small" type="number" fullWidth value={loadingCharge} onChange={(e) => setLoadingCharge(e.target.value)} sx={inputSx} />
+                    </Box>
+                    <Box>
+                      <Typography sx={fieldLabelSx}>Transport (Rs)</Typography>
+                      <TextField size="small" type="number" fullWidth value={transportCharge} onChange={(e) => setTransportCharge(e.target.value)} sx={inputSx} />
+                    </Box>
+                    <Box>
+                      <Typography sx={fieldLabelSx}>Special Discount (Rs)</Typography>
+                      <TextField size="small" type="number" fullWidth value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} sx={inputSx} />
+                    </Box>
+                    <Box sx={{ gridColumn: "1 / -1" }}>
+                      <Typography sx={fieldLabelSx}>Notes</Typography>
+                      <TextField size="small" fullWidth multiline minRows={2} value={notes} onChange={(e) => setNotes(e.target.value)} sx={inputSx} placeholder="Scheme / Remarks" />
+                    </Box>
+                  </Box>
+                </Card>
+
+                <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
+                  <Box sx={cardHeaderSx}>
+                    <Typography sx={panelTitleSx}>Quick Tile Calculator</Typography>
+                  </Box>
+                  <Box sx={{ p: 2.1 }}>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                      {[
+                        { label: "Room Length (ft)", key: "length" },
+                        { label: "Room Width (ft)",  key: "width"  },
+                        { label: "Wastage %",         key: "wastage" },
+                        { label: "Coverage/Box (sqft)", key: "coverage" },
+                      ].map(({ label, key }) => (
+                        <Box key={key}>
+                          <Typography sx={fieldLabelSx}>{label}</Typography>
+                          <TextField size="small" fullWidth value={calculator[key]} onChange={(e) => setCalculator((prev) => ({ ...prev, [key]: e.target.value }))} sx={inputSx} placeholder="0" />
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box sx={{ mt: 1.6, p: 1.2, borderRadius: "8px", background: "#e8f5ee", color: "#166534", fontSize: 12 }}>
+                      <strong>Room Area:</strong> {fmt(calculatorResult.area)} sqft{"  |  "}
+                      <strong>With {calculator.wastage || 0}% wastage:</strong> {fmt(calculatorResult.areaWithWastage)} sqft{"  |  "}
+                      <strong>Boxes needed:</strong> {calculatorResult.boxesNeeded} boxes
+                    </Box>
+                  </Box>
+                </Card>
+              </Box>
+
+              <Box>
+                <Card sx={sectionCardSx}>
+                  <Box sx={cardHeaderSx}>
+                    <Typography sx={panelTitleSx}>Bill Summary</Typography>
+                  </Box>
+                  <Box sx={{ p: 2.1 }}>
+                    <Box component="table" sx={{ width: "100%", borderCollapse: "collapse" }}>
+                      <Box component="tbody">
+                        {summaryRows.map(([label, value]) => {
+                          const isTotalRow = label === "Total" || label === "Final Amount";
+                          return (
+                            <Box component="tr" key={label} sx={{ borderTop: isTotalRow ? `1px solid ${border}` : "none" }}>
+                              <Box component="td" sx={{ py: 0.9, color: muted, fontWeight: isTotalRow ? 700 : 500 }}>{label}</Box>
+                              <Box component="td" sx={{ py: 0.9, textAlign: "right", fontWeight: 800, color: isTotalRow ? primary : "#1c2333", fontSize: isTotalRow ? 15 : 13 }}>{value}</Box>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                    <Button
+                      variant="contained"
+                      startIcon={<SaveIcon />}
+                      onClick={handleSubmit}
+                      disabled={items.length === 0 || Boolean(invoiceData)}
+                      sx={{ mt: 1.5, borderRadius: "10px", py: 1.15, textTransform: "none", fontWeight: 700, width: "100%", background: "#1a7a4a", "&:hover": { background: "#146038" } }}
+                    >
+                      Generate Quotation
+                    </Button>
+                  </Box>
+                </Card>
+              </Box>
+            </Box>
+          )}
+
           {/* Charges card */}
+          {!isQuotation && (
           <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
             <Box sx={cardHeaderSx}>
-              <Typography sx={panelTitleSx}>{isQuotation ? "Charges & Notes" : "Charges"}</Typography>
+              <Typography sx={panelTitleSx}>Charges</Typography>
             </Box>
-            <Box sx={{ p: 2.2, display: "grid", gridTemplateColumns: { xs: "1fr", md: isQuotation ? "repeat(3, 1fr)" : "repeat(2, 1fr)" }, gap: 1.5 }}>
+            <Box sx={{ p: 2.2, display: "grid", gridTemplateColumns: { xs: "1fr", md: isQuotation ? "repeat(4, 1fr)" : "repeat(3, 1fr)" }, gap: 1.5 }}>
               <Box>
                 <Typography sx={fieldLabelSx}>{isQuotation ? "GST Rate" : "Tax %"}</Typography>
                 <TextField select size="small" fullWidth value={tax} onChange={(e) => setTax(e.target.value)} sx={inputSx}>
@@ -975,11 +1175,15 @@ const Invoice = ({ mode = "invoice" }) => {
               {isQuotation ? (
                 <>
                   <Box>
+                    <Typography sx={fieldLabelSx}>Loading Charges (Rs)</Typography>
+                    <TextField size="small" type="number" fullWidth value={loadingCharge} onChange={(e) => setLoadingCharge(e.target.value)} sx={inputSx} />
+                  </Box>
+                  <Box>
                     <Typography sx={fieldLabelSx}>Transport (Rs)</Typography>
                     <TextField size="small" type="number" fullWidth value={transportCharge} onChange={(e) => setTransportCharge(e.target.value)} sx={inputSx} />
                   </Box>
                   <Box>
-                    <Typography sx={fieldLabelSx}>Extra Discount (Rs)</Typography>
+                    <Typography sx={fieldLabelSx}>Special Discount (Rs)</Typography>
                     <TextField size="small" type="number" fullWidth value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} sx={inputSx} />
                   </Box>
                   <Box sx={{ gridColumn: "1 / -1" }}>
@@ -988,16 +1192,39 @@ const Invoice = ({ mode = "invoice" }) => {
                   </Box>
                 </>
               ) : (
-                <Box>
-                  <Typography sx={fieldLabelSx}>Discount %</Typography>
-                  <TextField size="small" type="number" fullWidth value={discount} onChange={(e) => setDiscount(e.target.value)} sx={inputSx} />
-                </Box>
+                <>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Loading Charges (Rs)</Typography>
+                    <TextField size="small" type="number" fullWidth value={loadingCharge} onChange={(e) => setLoadingCharge(e.target.value)} sx={inputSx} />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Transport (Rs)</Typography>
+                    <TextField size="small" type="number" fullWidth value={transportCharge} onChange={(e) => setTransportCharge(e.target.value)} sx={inputSx} />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Special Discount (Rs)</Typography>
+                    <TextField size="small" type="number" fullWidth value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} sx={inputSx} />
+                  </Box>
+                  <Box sx={{ gridColumn: { xs: "auto", md: "1 / span 2" } }}>
+                    <Typography sx={fieldLabelSx}>Advance Received (Rs)</Typography>
+                    <TextField
+                      size="small"
+                      type="number"
+                      fullWidth
+                      value={payment?.paidAmount ?? ""}
+                      onChange={(e) => setPayment((prev) => ({ ...prev, paidAmount: e.target.value }))}
+                      sx={inputSx}
+                    />
+                  </Box>
+                </>
               )}
             </Box>
           </Card>
+          )}
         </Box>
 
         {/* Right column */}
+        {!isQuotation && (
         <Box>
           <Card sx={sectionCardSx}>
             <Box sx={cardHeaderSx}>
@@ -1006,12 +1233,14 @@ const Invoice = ({ mode = "invoice" }) => {
             <Box sx={{ p: 2.1 }}>
               <Box component="table" sx={{ width: "100%", borderCollapse: "collapse" }}>
                 <Box component="tbody">
-                  {summaryRows.map(([label, value], index) => (
-                    <Box component="tr" key={label} sx={{ borderTop: index === summaryRows.length - 1 ? `1px solid ${border}` : "none" }}>
-                      <Box component="td" sx={{ py: 0.9, color: muted, fontWeight: index === summaryRows.length - 1 ? 700 : 500 }}>{label}</Box>
-                      <Box component="td" sx={{ py: 0.9, textAlign: "right", fontWeight: 800, color: index === summaryRows.length - 1 ? primary : "#1c2333", fontSize: index === summaryRows.length - 1 ? 15 : 13 }}>{value}</Box>
+                  {summaryRows.map(([label, value]) => {
+                    const isTotalRow = label === "Total" || label === "Final Amount";
+                    return (
+                    <Box component="tr" key={label} sx={{ borderTop: isTotalRow ? `1px solid ${border}` : "none" }}>
+                      <Box component="td" sx={{ py: 0.9, color: muted, fontWeight: isTotalRow ? 700 : 500 }}>{label}</Box>
+                      <Box component="td" sx={{ py: 0.9, textAlign: "right", fontWeight: 800, color: isTotalRow ? primary : "#1c2333", fontSize: isTotalRow ? 15 : 13 }}>{value}</Box>
                     </Box>
-                  ))}
+                  )})}
                 </Box>
               </Box>
               {isQuotation && (
@@ -1096,6 +1325,7 @@ const Invoice = ({ mode = "invoice" }) => {
             </Card>
           )}
         </Box>
+        )}
       </Box>
 
       {invoiceData && (

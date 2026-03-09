@@ -28,6 +28,7 @@ const T = {
 const CATEGORY_OPTIONS = ["Floor Tile", "Wall Tile", "Vitrified Tile", "Parking Tile", "Granite", "Marble"];
 const BRAND_OPTIONS = ["Kajaria", "Somany", "Nitco", "Johnson", "Orientbell", "Other"];
 const FINISH_OPTIONS = ["Matt", "Glossy", "Polished", "Satin", "Rustic"];
+const DEFAULT_RACKS = ["Rack-A1", "Rack-A2", "Rack-B1", "Rack-B2", "Rack-C1"];
 const GST_OPTIONS = [
   { label: "0% (Exempt)", value: 0 },
   { label: "5%", value: 5 },
@@ -155,6 +156,29 @@ const parseSizeToLengthWidth = (size = "") => {
 };
 
 const normalize = (value = "") => String(value).trim().toLowerCase();
+const firstFilled = (...values) => {
+  for (const value of values) {
+    if (value === undefined || value === null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return "";
+};
+const parseTextList = (value) => {
+  if (Array.isArray(value)) return value.map((v) => String(v || "").trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map((v) => v.trim()).filter(Boolean);
+  return [];
+};
+const getSettingsRacks = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("productDefaults") || "{}");
+    const racks = Array.isArray(saved?.racks) ? saved.racks : [];
+    const normalized = racks.map((r) => String(r || "").trim()).filter(Boolean);
+    return normalized.length > 0 ? normalized : DEFAULT_RACKS;
+  } catch {
+    return DEFAULT_RACKS;
+  }
+};
 
 const SupplierAddItem = ({ embedded = false, onSaved }) => {
   const [suppliers, setSuppliers] = useState([]);
@@ -167,12 +191,15 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
   const [loading, setLoading] = useState(false);
 
   const supplierItems = selectedSup?.items || [];
-  const rawProductsSupplied = selectedSup?.productsSupplied;
-  const supplierCatalogNames = Array.isArray(rawProductsSupplied)
-    ? rawProductsSupplied.map((name) => String(name || "").trim()).filter(Boolean)
-    : typeof rawProductsSupplied === "string"
-      ? rawProductsSupplied.split(",").map((name) => name.trim()).filter(Boolean)
+  const rawProductNames = selectedSup?.productNames;
+  const supplierCatalogNames = Array.isArray(rawProductNames)
+    ? rawProductNames.map((name) => String(name || "").trim()).filter(Boolean)
+    : typeof rawProductNames === "string"
+      ? rawProductNames.split(",").map((name) => name.trim()).filter(Boolean)
       : [];
+  const supplierItemNames = supplierItems
+    .map((item) => String(item?.name || "").trim())
+    .filter(Boolean);
   const supplierLinkedProducts = allProducts.filter((product) => {
     const pid = product?.supplierId?._id || product?.supplierId;
     return product?.isSupplierItem && pid && selectedSup?._id && String(pid) === String(selectedSup._id);
@@ -180,8 +207,21 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
   const supplierLinkedProductNames = supplierLinkedProducts
     .map((product) => String(product?.name || "").trim())
     .filter(Boolean);
+  const supplierCategoryList = [
+    ...parseTextList(selectedSup?.categories),
+    ...parseTextList(selectedSup?.productsSupplied),
+  ];
+  const linkedCategories = supplierLinkedProducts
+    .map((product) => String(product?.category || "").trim())
+    .filter(Boolean);
+  const categoryOptions = [...new Set([
+    ...CATEGORY_OPTIONS,
+    ...supplierCategoryList,
+    ...linkedCategories,
+    String(form.category || "").trim(),
+  ].filter(Boolean))];
   const supNames = [...new Set([
-    ...supplierItems.map((i) => i.name).filter(Boolean),
+    ...supplierItemNames,
     ...supplierCatalogNames,
     ...supplierLinkedProductNames,
   ])];
@@ -202,8 +242,18 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
     ...selectedPurchaseItems.map((i) => String(i.received ?? i.qty)).filter(Boolean),
   ])];
   const supColorDesigns = [...new Set(selectedNameItems.map((i) => i.colorDesign).filter(Boolean))];
+  const rackOptions = [...new Set([
+    ...getSettingsRacks(),
+    ...allProducts.map((p) => String(p?.rackLocation || "").trim()).filter(Boolean),
+    String(form.rackLocation || "").trim(),
+  ].filter(Boolean))];
   const uomOptions = supUnits.length > 0 ? supUnits : UOM_OPTIONS_ALL;
-  const supplierItemLabel = supNames.length ? supNames.join(", ") : "No items";
+  const supplierItemLabelSource = supplierItemNames.length > 0
+    ? supplierItemNames
+    : supplierCatalogNames;
+  const supplierItemLabel = supplierItemLabelSource.length
+    ? supplierItemLabelSource.join(", ")
+    : "No items";
 
   useEffect(() => {
     Promise.all([getSuppliers(), getProducts()])
@@ -282,6 +332,35 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
       .flatMap((purchase) => purchase?.products || [])
       .find((item) => normalize(item?.name) === n);
     const source = purchaseMatch || itemMatch || productMatch || null;
+    const supplierBrandFallback = Array.isArray(selectedSup?.brands)
+      ? selectedSup.brands.find((value) => String(value || "").trim())
+      : String(selectedSup?.brands || "")
+          .split(",")
+          .map((value) => value.trim())
+          .find(Boolean) || "";
+    const supplierNamesForMap = parseTextList(selectedSup?.productNames);
+    const supplierCategoriesForMap = parseTextList(selectedSup?.categories);
+    const mappedCategoryFromSupplier = (() => {
+      const idx = supplierNamesForMap.findIndex((name) => normalize(name) === n);
+      if (idx < 0) return "";
+      return supplierCategoriesForMap[idx] || "";
+    })();
+    const resolvedCategory = firstFilled(
+      purchaseMatch?.category,
+      itemMatch?.category,
+      productMatch?.category,
+      mappedCategoryFromSupplier,
+      supplierCategoryList.length === 1 ? supplierCategoryList[0] : ""
+    );
+    const resolvedBrand = firstFilled(
+      purchaseMatch?.brand,
+      purchaseMatch?.brandName,
+      purchaseMatch?.collection,
+      itemMatch?.brand,
+      itemMatch?.brandName,
+      productMatch?.brand,
+      supplierBrandFallback
+    );
     const parsed = parseSizeToLengthWidth(
       source?.size || (source?.lengthCm && source?.widthCm ? `${source.lengthCm}x${source.widthCm}` : "")
     );
@@ -293,8 +372,8 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
     setForm((prev) => ({
       ...prev,
       name: nextName,
-      category: source?.category || prev.category,
-      brand: source?.brand || prev.brand,
+      category: resolvedCategory || prev.category,
+      brand: resolvedBrand || prev.brand,
       finish: source?.finish || prev.finish,
       colorDesign: source?.colorDesign || prev.colorDesign,
       code: source?.code || prev.code,
@@ -321,6 +400,7 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
         ? String(source.coverageArea)
         : (derivedCoverage || prev.coverageArea),
       uom: source?.unit || source?.uom || prev.uom,
+      rackLocation: source?.rackLocation || prev.rackLocation,
       lengthCm: parsed.lengthCm || prev.lengthCm,
       widthCm: parsed.widthCm || prev.widthCm,
       image: nextImage || prev.image,
@@ -454,36 +534,44 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
           </TextField>
         )}
 
+        {/* ── ONLY CHANGE: Selected Supplier info box — fixed alignment & sizing ── */}
         {selectedSup && (
           <Box
             sx={{
-              background: "#f5f3ff",
-              border: "1px solid #ddd6fe",
-              borderRadius: 2,
-              p: 2,
+              border: `1px solid #ddd6fe`,
+              borderRadius: "8px",
               mb: 2.2,
+              overflow: "hidden",
             }}
           >
-            <Typography fontSize={13} fontWeight={600} color="#6d28d9" mb={1}>
-              Selected Supplier
-            </Typography>
-            <Box sx={{ display: "grid", gap: 0.8 }}>
-              <Box sx={infoRowSx}>
-                <Typography sx={infoKeySx}>Supplier Name</Typography>
-                <Chip label={selectedSup.name} size="small" color="secondary" sx={chipSx} />
-              </Box>
-              <Box sx={infoRowSx}>
-                <Typography sx={infoKeySx}>Mobile</Typography>
-                <Chip label={selectedSup.phone || "-"} size="small" variant="outlined" sx={chipSx} />
-              </Box>
-              <Box sx={infoRowSx}>
-                <Typography sx={infoKeySx}>Address</Typography>
-                <Chip label={selectedSup.address || "-"} size="small" variant="outlined" sx={chipSx} />
-              </Box>
-              <Box sx={infoRowSx}>
-                <Typography sx={infoKeySx}>Items</Typography>
-                <Chip label={supplierItemLabel} size="small" sx={{ ...chipSx, background: "#eff6ff", color: "#1d4ed8" }} />
-              </Box>
+            <Box sx={{ background: "#f5f3ff", px: 1.5, py: 0.8, borderBottom: "1px solid #ddd6fe" }}>
+              <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: ".07em" }}>
+                Selected Supplier
+              </Typography>
+            </Box>
+            <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 2.8fr", background: T.white }}>
+              {[
+                { key: "Supplier Name", value: selectedSup.name },
+                { key: "Mobile",        value: selectedSup.phone || "-" },
+                { key: "Address",       value: selectedSup.address || "-" },
+                { key: "Items",         value: supplierItemLabel },
+              ].map(({ key, value }, i, arr) => (
+                <Box
+                  key={key}
+                  sx={{
+                    px: 1.5,
+                    py: 1,
+                    borderRight: i < arr.length - 1 ? `1px solid #ede9fe` : "none",
+                  }}
+                >
+                  <Typography sx={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".06em", mb: 0.3 }}>
+                    {key}
+                  </Typography>
+                  <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text, wordBreak: "break-word", lineHeight: 1.4 }}>
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
           </Box>
         )}
@@ -549,7 +637,7 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
           <Box sx={{ gridColumn: "span 3" }}>
             <SupplierFormField label="Category" name="category" value={form.category} onChange={handleChange} disabled={!selectedSup} required select>
               <MenuItem value="">Select category</MenuItem>
-              {CATEGORY_OPTIONS.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
+              {categoryOptions.map((item) => <MenuItem key={item} value={item}>{item}</MenuItem>)}
             </SupplierFormField>
           </Box>
           <Box sx={{ gridColumn: "span 3" }}>
@@ -625,7 +713,22 @@ const SupplierAddItem = ({ embedded = false, onSaved }) => {
           <Box sx={{ gridColumn: "span 3" }}><SupplierFormField label="Opening Stock (sqft)" name="stock" value={form.stock} onChange={handleChange} disabled={!selectedSup} required type="number" placeholder="0" InputProps={{ readOnly: true }} helperText={suggestedQty.length > 0 ? `Suggested: ${suggestedQty.join(", ")}` : ""} /></Box>
           <Box sx={{ gridColumn: "span 3" }}><SupplierFormField label="Opening Stock (boxes)" name="stockBoxes" value={form.stockBoxes} onChange={handleChange} disabled={!selectedSup} required type="number" placeholder="0" /></Box>
           <Box sx={{ gridColumn: "span 3" }}><SupplierFormField label="Minimum Stock" name="reorderLevel" value={form.reorderLevel} onChange={handleChange} disabled={!selectedSup} required type="number" placeholder="100" /></Box>
-          <Box sx={{ gridColumn: "span 3" }}><SupplierFormField label="Rack Location" name="rackLocation" value={form.rackLocation} onChange={handleChange} disabled={!selectedSup} placeholder="Rack-A3" /></Box>
+          <Box sx={{ gridColumn: "span 3" }}>
+            <SupplierFormField
+              label="Rack Location"
+              name="rackLocation"
+              value={form.rackLocation}
+              onChange={handleChange}
+              disabled={!selectedSup}
+              select={rackOptions.length > 0}
+              placeholder="Rack-A3"
+            >
+              {rackOptions.length > 0 && [
+                <MenuItem key="" value="">Select rack</MenuItem>,
+                ...rackOptions.map((rack) => <MenuItem key={rack} value={rack}>{rack}</MenuItem>),
+              ]}
+            </SupplierFormField>
+          </Box>
 
           <Box sx={{ gridColumn: "span 3" }}>
             <SupplierFormField label="UOM" name="uom" value={form.uom} onChange={handleChange} disabled={!selectedSup} required select>

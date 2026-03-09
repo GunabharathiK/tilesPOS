@@ -37,9 +37,19 @@ exports.createPurchase = async (req, res) => {
       const received = Number(p.received) || Number(p.qty) || 0;
       const sqft = Number(p.sqft) || 0;
       const price = Number(p.price) || Number(p.costRate) || 0;
+      const lengthCm = Number(p.lengthCm) || 0;
+      const widthCm = Number(p.widthCm) || 0;
+      const piecesPerBox = Number(p.piecesPerBox) || Number(p.tilesPerBox) || 0;
 
       return {
         name:        p.name              || "",
+        category:    p.category          || "",
+        brand:       p.brand             || "",
+        finish:      p.finish            || "",
+        lengthCm,
+        widthCm,
+        piecesPerBox,
+        tilesPerBox: piecesPerBox,
         size:        p.size              || "",
         ordered,
         received,
@@ -187,9 +197,19 @@ exports.updatePurchase = async (req, res) => {
       const received = Number(p.received) || Number(p.qty) || 0;
       const sqft = Number(p.sqft) || 0;
       const price = Number(p.price) || Number(p.costRate) || 0;
+      const lengthCm = Number(p.lengthCm) || 0;
+      const widthCm = Number(p.widthCm) || 0;
+      const piecesPerBox = Number(p.piecesPerBox) || Number(p.tilesPerBox) || 0;
 
       return {
         name: p.name || "",
+        category: p.category || "",
+        brand: p.brand || "",
+        finish: p.finish || "",
+        lengthCm,
+        widthCm,
+        piecesPerBox,
+        tilesPerBox: piecesPerBox,
         size: p.size || "",
         ordered,
         received,

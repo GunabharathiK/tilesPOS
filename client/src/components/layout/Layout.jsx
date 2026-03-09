@@ -16,7 +16,13 @@ const Layout = () => {
     else navigate("/");
   };
 
-  const handleClose = () => navigate("/");
+  const handleClose = () => {
+    const path = location.pathname || "";
+    if (path.startsWith("/suppliers")) { navigate("/suppliers"); return; }
+    if (path.startsWith("/customers")) { navigate("/customers"); return; }
+    if (path.startsWith("/products")) { navigate("/products"); return; }
+    navigate("/");
+  };
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>

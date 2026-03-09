@@ -112,12 +112,26 @@ const PAYMENT_OPTIONS = [
 ];
 
 const FINISH_OPTIONS = ["Matt", "Glossy", "Polished", "Satin", "Rustic", "Natural"];
+const DEFAULT_BRAND_CHOICES = [
+  "Kajaria",
+  "Somany",
+  "Nitco",
+  "Johnson",
+  "Orientbell",
+  "Asian Granito",
+  "Simpolo",
+  "RAK",
+  "Cera",
+  "Other",
+];
 
 /* ── Blank row factory ──────────────────────────────────────── */
 let _rowId = 1;
 const newRow = () => ({
   _id:         _rowId++,
+  category:    "",
   productName: "",
+  brand:       "",
   finish:      "",
   lengthCm:    "",
   widthCm:     "",
@@ -132,6 +146,63 @@ const parseSize = (size = "") => {
   const [l = "", w = ""] = String(size).replace(/\s+/g, "").split(/[x×]/i);
   return { lengthCm: l, widthCm: w };
 };
+const parseList = (value) => {
+  if (Array.isArray(value)) return value.map((v) => String(v || "").trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map((v) => v.trim()).filter(Boolean);
+  return [];
+};
+const norm = (v) => String(v || "").trim().toLowerCase();
+const num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+};
+const pickText = (...values) =>
+  values.map((v) => String(v || "").trim()).find(Boolean) || "";
+const pickNumericText = (...values) => {
+  const nums = values.map(num);
+  const firstPositive = nums.find((n) => n !== undefined && n > 0);
+  if (firstPositive !== undefined) return String(firstPositive);
+  const firstZero = nums.find((n) => n === 0);
+  if (firstZero !== undefined) return "0";
+  return "";
+};
+const getSettingsBrands = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("productDefaults") || "{}");
+    if (!Array.isArray(saved?.brands) || saved.brands.length === 0) return DEFAULT_BRAND_CHOICES;
+    const normalized = saved.brands.map((b) => String(b || "").trim()).filter(Boolean);
+    return normalized.length > 0 ? normalized : DEFAULT_BRAND_CHOICES;
+  } catch {
+    return DEFAULT_BRAND_CHOICES;
+  }
+};
+const getSettingsCategories = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem("productDefaults") || "{}");
+    if (!Array.isArray(saved?.categories)) return [];
+    return saved.categories.map((c) => String(c || "").trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+};
+const toEditRow = (product, allProducts = []) => {
+  const parsed = parseSize(product?.size || "");
+  const match = allProducts.find((p) => norm(p?.name) === norm(product?.name));
+  return {
+    _id: _rowId++,
+    category: pickText(product?.category, match?.category),
+    productName: pickText(product?.name),
+    brand: pickText(product?.brand, match?.brand),
+    finish: pickText(product?.finish, match?.finish),
+    lengthCm: pickNumericText(product?.lengthCm, parsed.lengthCm, match?.lengthCm),
+    widthCm: pickNumericText(product?.widthCm, parsed.widthCm, match?.widthCm),
+    piecesPerBox: pickNumericText(product?.piecesPerBox, product?.tilesPerBox, match?.tilesPerBox, match?.piecesPerBox),
+    ordered: pickNumericText(product?.ordered, product?.qty),
+    received: pickNumericText(product?.received, product?.qty, product?.ordered),
+    sqft: pickNumericText(product?.sqft),
+    costRate: pickNumericText(product?.price, match?.purchasePrice, match?.price),
+  };
+};
 
 /* ══════════════════════════════════════════════════════════════
    Main Component
@@ -141,7 +212,8 @@ const SupplierProduct = () => {
   const location = useLocation();
   const preselectedSupplier = location.state?.supplier || null;
   const editPurchase = location.state?.editPurchase || null;
-  const isEditMode = Boolean(editPurchase?._id);
+  const editPurchaseId = editPurchase?._id || editPurchase?.id || "";
+  const isEditMode = Boolean(editPurchaseId);
 
   /* ── Header fields ── */
   const [suppliers,     setSuppliers]     = useState([]);
@@ -159,18 +231,7 @@ const SupplierProduct = () => {
   /* ── Items rows ── */
   const [rows, setRows] = useState(() => (
     Array.isArray(editPurchase?.products) && editPurchase.products.length > 0
-      ? editPurchase.products.map((product) => ({
-          _id: _rowId++,
-          productName: product.name || "",
-          finish: product.finish || "",
-          lengthCm: String(product.lengthCm ?? parseSize(product.size).lengthCm ?? ""),
-          widthCm: String(product.widthCm ?? parseSize(product.size).widthCm ?? ""),
-          piecesPerBox: String(product.piecesPerBox ?? product.tilesPerBox ?? ""),
-          ordered: product.ordered ?? product.qty ?? "",
-          received: product.received ?? product.qty ?? "",
-          sqft: product.sqft ?? "",
-          costRate: product.price ?? "",
-        }))
+      ? editPurchase.products.map((product) => toEditRow(product, []))
       : [newRow()]
   ));
 
@@ -210,18 +271,7 @@ const SupplierProduct = () => {
     setReceivedBy(editPurchase.receivedBy || "Murugan (Owner)");
     setRows(
       Array.isArray(editPurchase.products) && editPurchase.products.length > 0
-        ? editPurchase.products.map((product) => ({
-            _id: _rowId++,
-            productName: product.name || "",
-            finish: product.finish || "",
-            lengthCm: String(product.lengthCm ?? parseSize(product.size).lengthCm ?? ""),
-            widthCm: String(product.widthCm ?? parseSize(product.size).widthCm ?? ""),
-            piecesPerBox: String(product.piecesPerBox ?? product.tilesPerBox ?? ""),
-            ordered: product.ordered ?? product.qty ?? "",
-            received: product.received ?? product.qty ?? "",
-            sqft: product.sqft ?? "",
-            costRate: product.price ?? "",
-          }))
+        ? editPurchase.products.map((product) => toEditRow(product, allProducts))
         : [newRow()]
     );
     setFreight(
@@ -233,7 +283,7 @@ const SupplierProduct = () => {
     setQualityStatus(editPurchase.qualityStatus || "All OK");
     setPaymentStatus(editPurchase.paymentStatus || "Credit (Pay Later)");
     setRemarks(editPurchase.remarks || "");
-  }, [editPurchase, location.state?.supplierId]);
+  }, [editPurchase, location.state?.supplierId, allProducts]);
 
   const selectedSupplier =
     suppliers.find((supplier) => supplier._id === supplierId) || preselectedSupplier;
@@ -246,10 +296,25 @@ const SupplierProduct = () => {
         const next = { ...r, [field]: val };
 
         if (field === "productName") {
-          const match = allProducts.find(
-            (product) => String(product?.name || "").trim().toLowerCase() === String(val || "").trim().toLowerCase()
+          const selectedName = String(val || "").trim().toLowerCase();
+          const supplierItemMatch = (selectedSupplier?.items || []).find(
+            (item) => String(item?.name || "").trim().toLowerCase() === selectedName
+          );
+          const supplierLinkedMatch = allProducts.find((product) => {
+            const pid = product?.supplierId?._id || product?.supplierId;
+            return (
+              String(product?.name || "").trim().toLowerCase() === selectedName &&
+              product?.isSupplierItem &&
+              pid &&
+              String(pid) === String(supplierId)
+            );
+          });
+          const match = supplierLinkedMatch || allProducts.find(
+            (product) => String(product?.name || "").trim().toLowerCase() === selectedName
           );
           if (match) {
+            next.category = pickText(match?.category, supplierItemMatch?.category, next.category);
+            next.brand = match.brand || next.brand;
             next.finish = match.finish || next.finish;
             if (!next.lengthCm && match.lengthCm) next.lengthCm = String(match.lengthCm);
             if (!next.widthCm && match.widthCm) next.widthCm = String(match.widthCm);
@@ -257,6 +322,11 @@ const SupplierProduct = () => {
             if (!next.costRate && (match.purchasePrice || match.price)) {
               next.costRate = String(match.purchasePrice || match.price);
             }
+          } else if (!next.brand && supplierBrandChoices.length === 1) {
+            next.brand = supplierBrandChoices[0];
+          }
+          if (!next.category && supplierCategoryChoices.length === 1) {
+            next.category = supplierCategoryChoices[0];
           }
         }
 
@@ -312,6 +382,8 @@ const SupplierProduct = () => {
       isDraft,
       products: valid.map((r) => ({
         name:     r.productName,
+        category: r.category || "",
+        brand: r.brand || "",
         finish: r.finish || "",
         lengthCm: Number(r.lengthCm) || 0,
         widthCm:  Number(r.widthCm) || 0,
@@ -338,17 +410,21 @@ const SupplierProduct = () => {
     setSaving(true);
     try {
       if (isEditMode) {
-        await updatePurchase(editPurchase._id, payload);
+        await updatePurchase(editPurchaseId, payload);
       } else {
         await createPurchase(payload);
       }
       toast.success(isDraft ? "Draft saved ✅" : "Purchase saved & stock updated ✅");
-      navigate("/suppliers/payment", {
-        state: {
-          supplierId,
-          supplier: selectedSupplier,
-        },
-      });
+      if (isEditMode) {
+        navigate("/suppliers");
+      } else {
+        navigate("/suppliers/payment", {
+          state: {
+            supplierId,
+            supplier: selectedSupplier,
+          },
+        });
+      }
     } catch (err) {
       toast.error(err?.response?.data?.error || "Save failed");
     } finally { setSaving(false); }
@@ -363,7 +439,25 @@ const SupplierProduct = () => {
   const supplierItemNames = (selectedSupplier?.items || [])
     .map((item) => item?.name?.trim())
     .filter(Boolean);
-  const supplierCatalogNames = (selectedSupplier?.productsSupplied || [])
+  const supplierCatalogSource = Array.isArray(selectedSupplier?.productNames)
+    ? selectedSupplier.productNames
+    : typeof selectedSupplier?.productNames === "string"
+      ? selectedSupplier.productNames.split(",")
+      : Array.isArray(selectedSupplier?.productsSupplied)
+        ? selectedSupplier.productsSupplied
+        : typeof selectedSupplier?.productsSupplied === "string"
+          ? selectedSupplier.productsSupplied.split(",")
+          : [];
+  const supplierCategorySource = Array.isArray(selectedSupplier?.categories)
+    ? selectedSupplier.categories
+    : typeof selectedSupplier?.categories === "string"
+      ? selectedSupplier.categories.split(",")
+      : [];
+  const supplierBrandChoices = [...new Set(parseList(selectedSupplier?.brands))];
+  const supplierCategoryChoices = [...new Set(
+    parseList(selectedSupplier?.categories).concat(parseList(selectedSupplier?.productsSupplied))
+  )];
+  const supplierCatalogNames = supplierCatalogSource
     .map((name) => String(name || "").trim())
     .filter(Boolean);
   const supplierLinkedProductNames = allProducts
@@ -373,14 +467,52 @@ const SupplierProduct = () => {
     })
     .map((product) => String(product?.name || "").trim())
     .filter(Boolean);
+  const linkedBrandChoices = allProducts
+    .filter((product) => {
+      const pid = product?.supplierId?._id || product?.supplierId;
+      return product?.isSupplierItem && pid && String(pid) === String(supplierId);
+    })
+    .map((product) => String(product?.brand || "").trim())
+    .filter(Boolean);
+  const linkedCategoryChoices = allProducts
+    .filter((product) => {
+      const pid = product?.supplierId?._id || product?.supplierId;
+      return product?.isSupplierItem && pid && String(pid) === String(supplierId);
+    })
+    .map((product) => String(product?.category || "").trim())
+    .filter(Boolean);
+  const globalCategoryChoices = allProducts
+    .map((product) => String(product?.category || "").trim())
+    .filter(Boolean);
+  const globalProductChoices = allProducts
+    .map((product) => String(product?.name || "").trim())
+    .filter(Boolean);
+  const globalBrandChoices = allProducts
+    .map((product) => String(product?.brand || "").trim())
+    .filter(Boolean);
+  const settingsCategoryChoices = getSettingsCategories();
+  const settingsBrandChoices = getSettingsBrands();
+  const categoryChoices = [...new Set([
+    ...settingsCategoryChoices,
+    ...supplierCategoryChoices,
+    ...linkedCategoryChoices,
+    ...globalCategoryChoices,
+  ])];
+  const brandChoices = [...new Set([
+    ...supplierBrandChoices,
+    ...linkedBrandChoices,
+    ...globalBrandChoices,
+    ...settingsBrandChoices,
+  ])];
 
   const productChoices = supplierId
     ? [...new Set([
         ...supplierLinkedProductNames,
         ...supplierItemNames,
         ...supplierCatalogNames,
+        ...globalProductChoices,
       ])]
-    : TILE_PRODUCTS;
+    : [...new Set([...globalProductChoices, ...TILE_PRODUCTS])];
 
   const sel = (extra = {}) => ({ ...inp(extra), cursor: "pointer", appearance: "auto" });
 
@@ -444,7 +576,8 @@ const SupplierProduct = () => {
                   Suggested Products
                 </Typography>
                 <Typography sx={{ fontSize: 13, color: T.text }}>
-                  {(selectedSupplier.productsSupplied || []).slice(0, 2).join(", ") || "-"}
+                  {supplierCatalogNames.slice(0, 2).join(", ") || "-"}
+                  {supplierCategorySource.length > 0 ? ` (${supplierCategorySource[0]})` : ""}
                 </Typography>
               </Box>
             </Box>
@@ -539,18 +672,20 @@ const SupplierProduct = () => {
             {/* Table */}
             <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "8px", overflow: "hidden" }}>
               <Box sx={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}>
 
                   {/* ── Table header — dark blue ── */}
                   <thead>
                     <tr style={{ background: T.primary }}>
                       {[
-                        { h: "Tile / Product",      w: "18%" },
+                        { h: "Product Name",        w: "17%" },
+                        { h: "Category",            w: "10%" },
+                        { h: "Brand",               w: "10%" },
                         { h: "Finish",              w: "10%" },
-                        { h: "Size (LxB)",          w: "13%" },
+                        { h: "Size (LxB)",          w: "12%" },
                         { h: "Pieces / Box",        w: "8%"  },
-                        { h: "Ordered (Boxes)",     w: "8%"  },
-                        { h: "Received (Boxes)",    w: "8%"  },
+                        { h: "Ordered (Boxes)",     w: "6%"  },
+                        { h: "Received (Boxes)",    w: "6%"  },
                         { h: "Diff",                w: "6%"  },
                         { h: "Sqft",                w: "8%"  },
                         { h: "Cost Rate (₹/sqft)",  w: "12%" },
@@ -582,8 +717,8 @@ const SupplierProduct = () => {
                           onMouseEnter={(e) => e.currentTarget.style.background = T.primaryLight}
                           onMouseLeave={(e) => e.currentTarget.style.background = rowBg}>
 
-                          {/* Tile / Product — autocomplete datalist */}
-                          <td style={{ padding: "7px 8px" }}>
+                          {/* Product Name — autocomplete datalist */}
+                          <td style={{ padding: "7px 6px" }}>
                             <input
                               list={`prod-${row._id}`}
                               style={inp({ fontSize: 12 })}
@@ -595,6 +730,31 @@ const SupplierProduct = () => {
                             <datalist id={`prod-${row._id}`}>
                               {productChoices.map((p) => <option key={p} value={p} />)}
                             </datalist>
+                          </td>
+
+                          <td style={{ padding: "7px 8px" }}>
+                            <select
+                              style={sel({ fontSize: 12, padding: "8px 8px" })}
+                              value={row.category || ""}
+                              onChange={(e) => updRow(row._id, "category", e.target.value)}
+                              onFocus={onFocus} onBlur={onBlur}
+                            >
+                              <option value="">Select</option>
+                              {categoryChoices.map((c) => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+
+                          {/* Brand */}
+                          <td style={{ padding: "7px 6px" }}>
+                            <select
+                              style={sel({ fontSize: 12, padding: "8px 8px" })}
+                              value={row.brand || ""}
+                              onChange={(e) => updRow(row._id, "brand", e.target.value)}
+                              onFocus={onFocus} onBlur={onBlur}
+                            >
+                              <option value="">Select</option>
+                              {brandChoices.map((b) => <option key={b} value={b}>{b}</option>)}
+                            </select>
                           </td>
 
                           {/* Finish */}
@@ -637,7 +797,7 @@ const SupplierProduct = () => {
                           <td style={{ padding: "7px 6px" }}>
                             <input
                               type="number" min={0}
-                              style={inp({ fontSize: 12 })}
+                              style={inp({ fontSize: 12, width: 72, minWidth: 72, padding: "7px 6px", textAlign: "center" })}
                               placeholder="4"
                               value={row.piecesPerBox}
                               onChange={(e) => updRow(row._id, "piecesPerBox", e.target.value)}
@@ -909,6 +1069,4 @@ const SupplierProduct = () => {
 };
 
 export default SupplierProduct;
-
-
 

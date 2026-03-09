@@ -40,7 +40,10 @@ const supplierSchema = new mongoose.Schema(
     city:           { type: String, default: "" },
 
     // ── Products & Category ───────────────────────────────────
-    productsSupplied: [{ type: String }],                 // multi-select products list
+    // `productsSupplied` is kept for backward compatibility and mirrors `categories`.
+    productsSupplied: [{ type: String }],
+    categories:       [{ type: String }],
+    productNames:     [{ type: String }],
     brands:           { type: String, default: "" },      // brands / collections
 
     // ── GST & Tax ────────────────────────────────────────────

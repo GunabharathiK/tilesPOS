@@ -3,9 +3,6 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendOtpSms, OTP_EXPIRY_MINUTES } = require("../utils/smsService");
 
-const ADMIN_PHONE = "6383014473";
-const ADMIN_PASSWORD = "guna8352";
-
 // ✅ Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
@@ -17,49 +14,26 @@ const generateToken = (user) => {
 
 const sanitizePhone = (value = "") => value.toString().replace(/\D/g, "").slice(0, 10);
 const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
+let userIndexesChecked = false;
 
-const ensureDefaultAdmin = async () => {
-  const phone = sanitizePhone(ADMIN_PHONE);
-  let admin = await User.findOne({ phone });
-
-  if (!admin) {
-    admin = await User.create({
-      name: "Admin",
-      phone,
-      password: ADMIN_PASSWORD,
-      role: "admin",
-    });
-    return admin;
+const ensureUserIndexes = async () => {
+  if (userIndexesChecked) return;
+  userIndexesChecked = true;
+  try {
+    const indexes = await User.collection.indexes();
+    const hasLegacyEmailIndex = indexes.some((idx) => idx.name === "email_1");
+    if (hasLegacyEmailIndex) {
+      await User.collection.dropIndex("email_1");
+    }
+  } catch {
+    // Ignore index-inspection failures; normal auth flow should continue.
   }
-
-  let changed = false;
-
-  if (admin.role !== "admin") {
-    admin.role = "admin";
-    changed = true;
-  }
-
-  if (admin.name !== "Admin") {
-    admin.name = "Admin";
-    changed = true;
-  }
-
-  const passwordMatches = await admin.matchPassword(ADMIN_PASSWORD);
-  if (!passwordMatches) {
-    admin.password = ADMIN_PASSWORD;
-    changed = true;
-  }
-
-  if (changed) {
-    await admin.save();
-  }
-
-  return admin;
 };
 
 // ✅ REGISTER (admin only should call this, or use seed script)
 exports.register = async (req, res) => {
   try {
+    await ensureUserIndexes();
     const { name, phone, password, role } = req.body;
     const normalizedPhone = sanitizePhone(phone);
 
@@ -75,12 +49,8 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 6 characters" });
     }
 
-    if (role === "admin" && normalizedPhone !== ADMIN_PHONE) {
-      return res.status(400).json({ error: `Admin phone must be ${ADMIN_PHONE}` });
-    }
-
-    if (role === "admin") {
-      await ensureDefaultAdmin();
+    if (role && !["admin", "staff"].includes(String(role).toLowerCase())) {
+      return res.status(400).json({ error: "Role must be admin or staff" });
     }
 
     const exists = await User.findOne({ phone: normalizedPhone });
@@ -90,7 +60,7 @@ exports.register = async (req, res) => {
       name: name.trim(),
       phone: normalizedPhone,
       password,
-      role,
+      role: String(role || "staff").toLowerCase(),
     });
 
     res.status(201).json({
@@ -108,7 +78,7 @@ exports.register = async (req, res) => {
 // ✅ LOGIN
 exports.login = async (req, res) => {
   try {
-    await ensureDefaultAdmin();
+    await ensureUserIndexes();
     const normalizedPhone = sanitizePhone(req.body.phone);
     const { password } = req.body;
 
@@ -141,6 +111,7 @@ exports.login = async (req, res) => {
 // ✅ GET current user (me)
 exports.getMe = async (req, res) => {
   try {
+    await ensureUserIndexes();
     const user = await User.findById(req.user.id).select("-password");
     res.json(user);
   } catch (err) {
@@ -151,7 +122,7 @@ exports.getMe = async (req, res) => {
 // ✅ GET all users — admin only
 exports.getUsers = async (req, res) => {
   try {
-    await ensureDefaultAdmin();
+    await ensureUserIndexes();
     const users = await User.find().select("-password").sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
@@ -159,9 +130,68 @@ exports.getUsers = async (req, res) => {
   }
 };
 
+// ✅ UPDATE user — admin only
+exports.updateUser = async (req, res) => {
+  try {
+    await ensureUserIndexes();
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const incomingRole = req.body.role;
+    const role = incomingRole === undefined ? user.role : String(incomingRole).toLowerCase();
+    if (!["admin", "staff"].includes(role)) {
+      return res.status(400).json({ error: "Role must be admin or staff" });
+    }
+
+    const normalizedPhone =
+      req.body.phone === undefined ? user.phone : sanitizePhone(req.body.phone);
+    if (!normalizedPhone || normalizedPhone.length !== 10) {
+      return res.status(400).json({ error: "Phone number must be 10 digits" });
+    }
+
+    const name =
+      req.body.name === undefined ? user.name : String(req.body.name || "").trim();
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
+    }
+
+    const existing = await User.findOne({ phone: normalizedPhone, _id: { $ne: user._id } });
+    if (existing) {
+      return res.status(400).json({ error: "Phone number already registered" });
+    }
+
+    const newPassword = String(req.body.password || "").trim();
+    if (newPassword && newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+
+    user.name = name;
+    user.phone = normalizedPhone;
+    user.role = role;
+    if (newPassword) {
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    return res.json({
+      _id: user._id,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 // ✅ DELETE user — admin only
 exports.deleteUser = async (req, res) => {
   try {
+    await ensureUserIndexes();
     if (req.params.id === req.user.id.toString()) {
       return res.status(400).json({ error: "You cannot delete your own account" });
     }
@@ -175,15 +205,11 @@ exports.deleteUser = async (req, res) => {
 // Admin-only forgot password: request OTP by SMS
 exports.requestAdminForgotPasswordOtp = async (req, res) => {
   try {
-    await ensureDefaultAdmin();
+    await ensureUserIndexes();
     const normalizedPhone = sanitizePhone(req.body.phone);
 
     if (!normalizedPhone || normalizedPhone.length !== 10) {
       return res.status(400).json({ error: "Valid admin phone number is required" });
-    }
-
-    if (normalizedPhone !== ADMIN_PHONE) {
-      return res.status(403).json({ error: "Forgot password is available only for admin account" });
     }
 
     const admin = await User.findOne({ phone: normalizedPhone, role: "admin" });
@@ -210,17 +236,13 @@ exports.requestAdminForgotPasswordOtp = async (req, res) => {
 // Admin-only forgot password: verify OTP and reset password
 exports.resetAdminPasswordWithOtp = async (req, res) => {
   try {
-    await ensureDefaultAdmin();
+    await ensureUserIndexes();
     const normalizedPhone = sanitizePhone(req.body.phone);
     const otp = String(req.body.otp || "").trim();
     const newPassword = String(req.body.newPassword || "");
 
     if (!normalizedPhone || normalizedPhone.length !== 10) {
       return res.status(400).json({ error: "Valid admin phone number is required" });
-    }
-
-    if (normalizedPhone !== ADMIN_PHONE) {
-      return res.status(403).json({ error: "Password reset is available only for admin account" });
     }
 
     if (!otp || otp.length !== 6) {

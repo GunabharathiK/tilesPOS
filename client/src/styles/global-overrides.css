@@ -1,0 +1,14 @@
+:root {
+  --app-placeholder-size: 11px;
+}
+
+input::placeholder,
+textarea::placeholder {
+  font-size: var(--app-placeholder-size);
+  opacity: 1;
+}
+
+.MuiInputBase-input::placeholder {
+  font-size: var(--app-placeholder-size);
+  opacity: 1;
+}

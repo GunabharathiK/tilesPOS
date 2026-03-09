@@ -173,13 +173,13 @@ const SupplierPayment = () => {
   };
 
   const resetForm = () => {
-    setSupplierId(location.state?.supplierId || "");
+    setSupplierId("");
     setAmountPaying("");
-    setPaymentMode("NEFT / Online Transfer");
+    setPaymentMode("");
     setTxnRef("");
     setSelectedGRNs([]);
     setRemarks("");
-    setPayDate(todayStr());
+    setPayDate("");
   };
 
   const handleRecord = async () => {

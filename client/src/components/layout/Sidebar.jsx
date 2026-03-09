@@ -154,7 +154,7 @@ const Sidebar = ({ open = true, onToggle }) => {
 
   const supplierSubItems = [
     { label: "Supplier Create",          icon: <AddBusinessIcon sx={{ fontSize: 17 }} />, path: "/suppliers/create" },
-    { label: "Supplier Products",        icon: <ListAltIcon sx={{ fontSize: 17 }} />,     path: "/suppliers/products" },
+    { label: "Purchase Products",        icon: <ListAltIcon sx={{ fontSize: 17 }} />,     path: "/suppliers/products" },
     { label: "Pay to Supplier",          icon: <PaymentsIcon sx={{ fontSize: 17 }} />,    path: "/suppliers/payment" },
     { label: "Supplier Product Details", icon: <ListAltIcon sx={{ fontSize: 17 }} />,     path: "/suppliers/details" },
   ];

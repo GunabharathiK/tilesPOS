@@ -63,6 +63,14 @@ const fieldLabelSx = {
 };
 
 const paymentModes = ["Cash", "UPI", "Card", "Bank Transfer", "Cheque"];
+const normPhone = (v) => String(v || "").replace(/\D/g, "");
+const openWhatsAppChat = (phone, message) => {
+  const isMobile = /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent || "");
+  const url = isMobile
+    ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    : `https://web.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(message)}`;
+  window.open(url, "_blank");
+};
 
 // Status badge
 const StatusBadge = ({ status }) => {
@@ -100,12 +108,13 @@ const CustomerPayments = () => {
   // Store prefill data in refs so clearing navigation state doesn't lose them
   const prefillCustomerRef = useRef(location.state?.prefillCustomer || {});
   const prefillInvoiceRef = useRef(location.state?.prefillInvoice || {});
-  const hasPrefill = Boolean(
+  const hasPrefillRef = useRef(Boolean(
     location.state?.fromPayAction ||
     location.state?.fromMoveToPayment ||
     location.state?.prefillCustomer ||
     location.state?.prefillInvoice
-  );
+  ));
+  const hasPrefill = hasPrefillRef.current;
 
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -168,6 +177,8 @@ const CustomerPayments = () => {
   // Two separate refs: one for customer selection, one for invoice selection
   const customerPrefillDoneRef = useRef(false);
   const invoicePrefillDoneRef = useRef(false);
+  const amountPrefillDoneRef = useRef(false);
+  const skipNextResetRef = useRef(false);
 
   // ── Step 1: match customer bucket once invoices load ──────────────────
   useEffect(() => {
@@ -177,12 +188,16 @@ const CustomerPayments = () => {
     const pCustomer = prefillCustomerRef.current;
 
     // Always re-attempt invoice ID match on every allBuckets update (handles race with new invoice)
-    if (pInvoice?.id && !invoicePrefillDoneRef.current) {
+    if ((pInvoice?.id || pInvoice?.invoiceNo) && !invoicePrefillDoneRef.current) {
       const invoiceBucket = allBuckets.find((e) =>
-        e.invoices?.some((inv) => inv._id === pInvoice.id)
+        e.invoices?.some((inv) =>
+          String(inv._id || "") === String(pInvoice.id || "") ||
+          String(inv.invoiceNo || "").trim().toLowerCase() === String(pInvoice.invoiceNo || "").trim().toLowerCase()
+        )
       );
       if (invoiceBucket) {
         customerPrefillDoneRef.current = true;
+        skipNextResetRef.current = true;
         setSelectedKey(invoiceBucket.key);
         return; // Step 2 will handle invoice selection
       }
@@ -193,13 +208,14 @@ const CustomerPayments = () => {
       const prefilled = allBuckets.find((e) =>
         (e.customer?.name || "").trim().toLowerCase() === pCustomer.name.trim().toLowerCase() &&
         (pCustomer.phone
-          ? String(e.customer?.phone || "") === String(pCustomer.phone)
+          ? normPhone(e.customer?.phone) === normPhone(pCustomer.phone)
           : true)
       );
       if (prefilled) {
         customerPrefillDoneRef.current = true;
         // Only mark invoice done if there's no specific invoice ID to wait for
         if (!pInvoice?.id) invoicePrefillDoneRef.current = true;
+        skipNextResetRef.current = true;
         setSelectedKey(prefilled.key);
       }
     }
@@ -211,11 +227,14 @@ const CustomerPayments = () => {
   useEffect(() => {
     if (!hasPrefill || invoicePrefillDoneRef.current || !selectedBucket) return;
     const pInvoice = prefillInvoiceRef.current;
-    if (!pInvoice?.id) { invoicePrefillDoneRef.current = true; return; }
-    const exists = selectedBucket.invoices?.some((inv) => inv._id === pInvoice.id);
-    if (exists) {
+    if (!pInvoice?.id && !pInvoice?.invoiceNo) { invoicePrefillDoneRef.current = true; return; }
+    const match = selectedBucket.invoices?.find((inv) =>
+      String(inv._id || "") === String(pInvoice.id || "") ||
+      String(inv.invoiceNo || "").trim().toLowerCase() === String(pInvoice.invoiceNo || "").trim().toLowerCase()
+    );
+    if (match?._id) {
       invoicePrefillDoneRef.current = true;
-      setSelectedInvoiceIds([pInvoice.id]);
+      setSelectedInvoiceIds([String(match._id)]);
     }
     // If not found yet, a subsequent fetchInvoices will update allBuckets → selectedBucket,
     // causing this effect to re-run until the invoice appears.
@@ -225,6 +244,10 @@ const CustomerPayments = () => {
   useEffect(() => {
     // Both steps must be done before we allow reset on selectedKey change
     if (!customerPrefillDoneRef.current || !invoicePrefillDoneRef.current) return;
+    if (skipNextResetRef.current) {
+      skipNextResetRef.current = false;
+      return;
+    }
     setAmountReceived("");
     setSelectedInvoiceIds([]);
   }, [selectedKey]);
@@ -273,6 +296,19 @@ const CustomerPayments = () => {
   );
   const payableOutstanding = selectedInvoices.length > 0 ? selectedInvoicesOutstanding : outstanding;
   const receiptNo = useMemo(() => `RCP-${String(Date.now()).slice(-4)}`, []);
+
+  // Step 3: auto-fill payment amount once selected invoice/customer is ready
+  useEffect(() => {
+    if (!hasPrefill || amountPrefillDoneRef.current) return;
+    if (!customerPrefillDoneRef.current || !invoicePrefillDoneRef.current) return;
+
+    const pInvoice = prefillInvoiceRef.current || {};
+    const rawDue = Number(pInvoice.dueAmount);
+    const due = Number.isFinite(rawDue) ? rawDue : payableOutstanding;
+    const next = Math.max(0, Math.min(Number(due) || 0, payableOutstanding));
+    setAmountReceived(next > 0 ? String(next) : "");
+    amountPrefillDoneRef.current = true;
+  }, [hasPrefill, payableOutstanding]);
 
   useEffect(() => {
     if (amountReceived === "") return;
@@ -443,16 +479,61 @@ const CustomerPayments = () => {
     w.document.close(); w.focus(); w.print(); w.close();
   };
 
-  const handlePreviewDownload = async () => {
-    if (!previewRef.current) return;
+  const buildPreviewPdf = async () => {
+    if (!previewRef.current) return null;
     const canvas = await html2canvas(previewRef.current, { scale: 2 });
     const pdf = new jsPDF("p", "mm", "a4");
     const imgWidth = 210;
     pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, imgWidth, (canvas.height * imgWidth) / canvas.width);
-    pdf.save(`Receipt-${previewData?.receiptNo || "RCP"}.pdf`);
+    const fileName = `Receipt-${previewData?.receiptNo || "RCP"}.pdf`;
+    return { pdf, fileName };
   };
 
-  const handlePreviewWhatsapp = () => toast.success("Receipt ready to send on WhatsApp");
+  const handlePreviewDownload = async () => {
+    const doc = await buildPreviewPdf();
+    if (!doc) return;
+    doc.pdf.save(doc.fileName);
+  };
+
+  const handlePreviewWhatsapp = async () => {
+    if (!previewData) { toast.error("Generate invoice first"); return; }
+    const toDigits = String(previewData.customerPhone || "").replace(/\D/g, "");
+    if (!toDigits) { toast.error("Customer phone number is required for WhatsApp"); return; }
+    const phone = toDigits.length === 10 ? `91${toDigits}` : toDigits;
+    const invoiceNo = previewData?.invoicePreviewData?.invoiceNo || "Payment Receipt";
+    const message = [
+      `Hello ${previewData.customerName || "Customer"},`,
+      "Your payment receipt is ready.",
+      `Invoice No: ${invoiceNo}`,
+      `Amount Received: Rs.${formatCurrency(previewData.received || 0)}`,
+      `Outstanding After: Rs.${formatCurrency(previewData.outstandingAfter || 0)}`,
+      `Date: ${previewData.date || receiptDate}`,
+    ].join("\n");
+    try {
+      const doc = await buildPreviewPdf();
+      if (!doc) {
+        openWhatsAppChat(phone, message);
+        return;
+      }
+
+      const pdfBlob = doc.pdf.output("blob");
+      const pdfFile = new File([pdfBlob], doc.fileName, { type: "application/pdf" });
+      if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
+        await navigator.share({
+          title: doc.fileName,
+          text: message,
+          files: [pdfFile],
+        });
+        return;
+      }
+
+      doc.pdf.save(doc.fileName);
+      openWhatsAppChat(phone, message);
+      toast.success("PDF downloaded. Please attach it in WhatsApp.");
+    } catch {
+      openWhatsAppChat(phone, message);
+    }
+  };
 
   const handlePreviewDone = () => {
     setPreviewOpen(false);
@@ -662,7 +743,7 @@ const CustomerPayments = () => {
             </Box>
 
             {/* Action buttons */}
-            <Box sx={{ mt: 2, display: "flex", gap: 1 }}>
+            <Box sx={{ mt: 2, display: "flex", gap: 1, flexWrap: "wrap" }}>
               <Button
                 variant="contained"
                 onClick={handleSave}
@@ -678,6 +759,22 @@ const CustomerPayments = () => {
                 sx={{ textTransform: "none", borderRadius: "9px", px: 2.5, fontWeight: 700, background: "#1a56a0", "&:hover": { background: "#0f3d7a" } }}
               >
                 {loading ? "Processing…" : "Generate Invoice"}
+              </Button>
+              <Button
+                variant="contained"
+                onClick={resetPaymentFields}
+                disabled={loading}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: "9px",
+                  px: 2.5,
+                  fontWeight: 700,
+                  background: "#64748b",
+                  color: "#ffffff",
+                  "&:hover": { background: "#475569" },
+                }}
+              >
+                Cancel
               </Button>
             </Box>
           </Box>

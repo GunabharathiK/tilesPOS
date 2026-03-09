@@ -25,6 +25,7 @@ const invoiceSchema = new mongoose.Schema(
         category: { type: String, default: "" },
         finish: { type: String, default: "" },
         quantity: Number,
+        boxes: { type: Number, default: 0 },
         size: { type: String, default: "" },
         uom: { type: String, default: "" },
         price: Number,
@@ -64,6 +65,8 @@ const invoiceSchema = new mongoose.Schema(
       loading: { type: Number, default: 0 },
       transport: { type: Number, default: 0 },
       extraDiscount: { type: Number, default: 0 },
+      customerTypeDiscount: { type: Number, default: 0 },
+      customerTypeDiscountPct: { type: Number, default: 0 },
     },
     notes: { type: String, default: "" },
 

@@ -6,6 +6,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const invoiceRoutes  = require("./routes/invoiceRoutes");
 const authRoutes     = require("./routes/authRoutes");
 const supplierRoutes = require("./routes/supplierRoutes"); // ✅ NEW
+const backupRoutes   = require("./routes/backupRoutes");
 
 const app = express();
 
@@ -19,5 +20,6 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/invoices",  invoiceRoutes);
 app.use("/api/auth",      authRoutes);
 app.use("/api/suppliers", supplierRoutes); // ✅ NEW
+app.use("/api/system",    backupRoutes);
 
 module.exports = app;

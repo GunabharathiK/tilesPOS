@@ -3,6 +3,32 @@ const Purchase = require("../models/Purchase");
 
 const calcTotalValue = (items) =>
   items.reduce((sum, it) => sum + Number(it.qty) * Number(it.price), 0);
+const normalizeProductsSupplied = (value) => {
+  const arr = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return [...new Set(
+    arr
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+  )];
+};
+const normalizeTextList = (value) => {
+  const arr = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return [...new Set(
+    arr
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+  )];
+};
+const normalizeCategories = (value) => normalizeProductsSupplied(value);
+const normalizeProductNames = (value) => normalizeTextList(value);
 
 // ── CREATE ───────────────────────────────────────────────────
 exports.createSupplier = async (req, res) => {
@@ -16,7 +42,7 @@ exports.createSupplier = async (req, res) => {
       // Address
       address, companyAddress, pincode, state, city,
       // Products & Category
-      productsSupplied, brands,
+      productsSupplied, categories, productNames, productName, brands,
       // GST & Tax
       panNumber, stateCode, registrationType,
       // Payment & Credit
@@ -37,6 +63,13 @@ exports.createSupplier = async (req, res) => {
       return res.status(400).json({ error: "Primary Mobile is required" });
     if (!resolvedAddress)
       return res.status(400).json({ error: "Full Address is required" });
+
+    const normalizedCategories = normalizeCategories(
+      categories !== undefined ? categories : productsSupplied
+    );
+    const normalizedProductNames = normalizeProductNames(
+      productNames !== undefined ? productNames : productName
+    );
 
     const supplier = await Supplier.create({
       // backward compat
@@ -61,8 +94,10 @@ exports.createSupplier = async (req, res) => {
       state:          state           || "",
       city:           city            || "",
       // products
-      productsSupplied: Array.isArray(productsSupplied) ? productsSupplied : [],
-      brands:           brands        || "",
+      productsSupplied: normalizedCategories,
+      categories:       normalizedCategories,
+      productNames:     normalizedProductNames,
+      brands:           normalizeTextList(brands).join(", "),
       // tax
       panNumber:        panNumber        || "",
       stateCode:        stateCode        || "",
@@ -124,6 +159,17 @@ exports.getSuppliers = async (req, res) => {
 
     const enriched = suppliers.map((s) => {
       const obj     = s.toObject();
+      obj.categories = normalizeCategories(
+        Array.isArray(obj.categories) && obj.categories.length > 0
+          ? obj.categories
+          : obj.productsSupplied
+      );
+      obj.productsSupplied = obj.categories;
+      obj.productNames = normalizeProductNames(
+        Array.isArray(obj.productNames) && obj.productNames.length > 0
+          ? obj.productNames
+          : (Array.isArray(obj.items) ? obj.items.map((item) => item?.name) : [])
+      );
 
       // Sanitize: if supplierPhone duplicates companyPhone (old data bug), clear it
       if (
@@ -165,6 +211,17 @@ exports.getSupplierById = async (req, res) => {
     if (!supplier) return res.status(404).json({ error: "Supplier not found" });
 
     const obj = supplier.toObject();
+    obj.categories = normalizeCategories(
+      Array.isArray(obj.categories) && obj.categories.length > 0
+        ? obj.categories
+        : obj.productsSupplied
+    );
+    obj.productsSupplied = obj.categories;
+    obj.productNames = normalizeProductNames(
+      Array.isArray(obj.productNames) && obj.productNames.length > 0
+        ? obj.productNames
+        : (Array.isArray(obj.items) ? obj.items.map((item) => item?.name) : [])
+    );
     // Sanitize duplicate phone on the fly
     if (obj.supplierPhone && (obj.supplierPhone === obj.companyPhone || obj.supplierPhone === obj.phone)) {
       obj.supplierPhone = "";
@@ -200,9 +257,26 @@ exports.updateSupplier = async (req, res) => {
     if (!body.phone && body.companyPhone)     body.phone   = body.companyPhone;
     if (!body.address && body.companyAddress) body.address = body.companyAddress;
 
-    // Ensure productsSupplied is an array
-    if (body.productsSupplied && !Array.isArray(body.productsSupplied)) {
-      body.productsSupplied = [body.productsSupplied];
+    // Ensure categories and productNames are normalized arrays
+    if (body.categories === undefined && body.productsSupplied !== undefined) {
+      body.categories = body.productsSupplied;
+    }
+    if (body.productNames === undefined && body.productName !== undefined) {
+      body.productNames = body.productName;
+    }
+    if (body.categories !== undefined) {
+      body.categories = normalizeCategories(body.categories);
+      body.productsSupplied = body.categories;
+    }
+    if (body.productsSupplied !== undefined) {
+      body.productsSupplied = normalizeCategories(body.productsSupplied);
+      if (body.categories === undefined) body.categories = body.productsSupplied;
+    }
+    if (body.productNames !== undefined) {
+      body.productNames = normalizeProductNames(body.productNames);
+    }
+    if (body.brands !== undefined) {
+      body.brands = normalizeTextList(body.brands).join(", ");
     }
 
     // Convert numeric strings

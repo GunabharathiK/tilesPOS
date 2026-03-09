@@ -14,6 +14,7 @@ import ConfirmDialog from "../common/ConfirmDialog";
 import {
   createSupplier,
   deleteSupplier,
+  deletePurchase,
   getPurchases,
   getSuppliers,
 } from "../../services/supplierService";
@@ -62,11 +63,20 @@ const getNumericRating = (rating) => {
   return 4;
 };
 
-const getSupplierProducts = (supplier) => {
+const getSupplierCategories = (supplier) => {
+  if (Array.isArray(supplier.categories) && supplier.categories.length > 0)
+    return supplier.categories;
   if (Array.isArray(supplier.productsSupplied) && supplier.productsSupplied.length > 0)
     return supplier.productsSupplied;
-  if (Array.isArray(supplier.items) && supplier.items.length > 0)
-    return [...new Set(supplier.items.map((item) => item.name).filter(Boolean))];
+  return [];
+};
+const getSupplierBrands = (supplier) => {
+  if (Array.isArray(supplier.brands) && supplier.brands.length > 0) {
+    return supplier.brands.map((b) => String(b || "").trim()).filter(Boolean);
+  }
+  if (typeof supplier.brands === "string") {
+    return supplier.brands.split(",").map((b) => b.trim()).filter(Boolean);
+  }
   return [];
 };
 
@@ -111,7 +121,6 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
         ? { bg: T.warningLight, color: T.warning }
         : { bg: T.dangerLight, color: T.danger };
 
-  const products = getSupplierProducts(supplier);
   const supplierPurchases = purchases.filter((purchase) => {
     const purchaseSupplierId = purchase.supplierId?._id || purchase.supplierId;
     return purchaseSupplierId === supplier._id;
@@ -193,8 +202,6 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
             <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".8px", mb: 1.5 }}>
               Bank And Business Details
             </Typography>
-            <DetailRow label="Products"       value={products.join(", ")} />
-            <DetailRow label="Brands"         value={supplier.brands} />
             <DetailRow label="Credit Limit"   value={supplier.creditLimit ? fmt(supplier.creditLimit) : ""} />
             <DetailRow label="Discount %"     value={supplier.discountPct} />
             <DetailRow label="Bank Name"      value={supplier.bankName} />
@@ -224,9 +231,6 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
                     <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>
                       {purchase.grnNo || purchase.invoiceNo}
                     </Typography>
-                    <Button onClick={() => onEditPurchase(purchase)} sx={{ background: T.primaryLight, color: T.primary, fontSize: 12, fontWeight: 700, minWidth: 140 }}>
-                      Edit Purchased Item
-                    </Button>
                   </Box>
                   <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 1.5, mb: 1.2 }}>
                     {[
@@ -246,10 +250,29 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
                     ))}
                   </Box>
                   <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "6px", overflow: "hidden", background: T.white }}>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,2.1fr) 88px 88px 108px", px: 1.5, py: 1, background: "#f3f6fb", borderBottom: `1px solid ${T.border}` }}>
-                      {["Item", "Size", "Qty", "Amount"].map((h) => (
-                        <Typography key={h} sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".4px" }}>
-                          {h}
+                    <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1.8fr) minmax(0,1fr) minmax(0,0.9fr) minmax(0,1fr) 80px 64px 92px 108px", px: 1.5, py: 1, background: "#f3f6fb", borderBottom: `1px solid ${T.border}` }}>
+                      {[
+                        { label: "Product", align: "left" },
+                        { label: "Category", align: "left" },
+                        { label: "Finish", align: "left" },
+                        { label: "Brand", align: "left" },
+                        { label: "Size", align: "center" },
+                        { label: "Qty", align: "center" },
+                        { label: "Sqft Rate", align: "right" },
+                        { label: "Amount", align: "right" },
+                      ].map((col) => (
+                        <Typography
+                          key={col.label}
+                          sx={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: T.muted,
+                            textTransform: "uppercase",
+                            letterSpacing: ".4px",
+                            textAlign: col.align,
+                          }}
+                        >
+                          {col.label}
                         </Typography>
                       ))}
                     </Box>
@@ -262,15 +285,27 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
                         <Box
                           key={`${purchase._id}-${index}`}
                           sx={{
-                            display: "grid", gridTemplateColumns: "minmax(0,2.1fr) 88px 88px 108px",
+                            display: "grid", gridTemplateColumns: "minmax(0,1.8fr) minmax(0,1fr) minmax(0,0.9fr) minmax(0,1fr) 80px 64px 92px 108px",
                             px: 1.5, py: 1,
                             borderBottom: index < purchase.products.length - 1 ? `1px solid ${T.border}` : "none",
                             alignItems: "center",
                           }}
                         >
                           <Typography sx={{ fontSize: 12, color: T.dark, fontWeight: 600, pr: 1 }}>{item.name || "-"}</Typography>
-                          <Typography sx={{ fontSize: 12, color: T.text }}>{item.size || "-"}</Typography>
-                          <Typography sx={{ fontSize: 12, color: T.text }}>{item.received || item.qty || 0}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, pr: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.category || "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, pr: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.finish || "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, pr: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {item.brand || item.brands || getSupplierBrands(supplier)[0] || "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, textAlign: "center" }}>{item.size || "-"}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, textAlign: "center" }}>{item.received || item.qty || 0}</Typography>
+                          <Typography sx={{ fontSize: 12, color: T.text, fontWeight: 600, textAlign: "right" }}>
+                            ₹{Number(item.price || 0).toLocaleString("en-IN")}
+                          </Typography>
                           <Typography sx={{ fontSize: 12, color: T.dark, fontWeight: 700, textAlign: "right" }}>
                             ₹{Number((Number(item.sqft) || 0) * (Number(item.price) || 0)).toLocaleString("en-IN")}
                           </Typography>
@@ -304,7 +339,7 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
 const SupplierRow = ({ supplier, serial, onView, onEditProduct, onPay, onDelete }) => {
   const totalPurchase = supplier.totalValue || 0;
   const payable       = supplier.totalDue   || 0;
-  const products      = getSupplierProducts(supplier);
+  const categories    = getSupplierCategories(supplier);
 
   const td = (extraStyle = {}) => ({
     padding: "0 10px",
@@ -348,11 +383,11 @@ const SupplierRow = ({ supplier, serial, onView, onEditProduct, onPay, onDelete 
         </Typography>
       </td>
 
-      {/* Products */}
+      {/* Category */}
       <td style={td({ width: 110 })}>
         <Typography sx={{ fontSize: 12, color: T.text }}>
-          {products.length > 0
-            ? products.slice(0, 2).join(", ") + (products.length > 2 ? "..." : "")
+          {categories.length > 0
+            ? categories.slice(0, 2).join(", ") + (categories.length > 2 ? "..." : "")
             : "-"}
         </Typography>
       </td>
@@ -470,9 +505,11 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
   const [search,        setSearch]        = useState("");
   const [stateFilter,   setStateFilter]   = useState("All States");
   const [balFilter,     setBalFilter]     = useState("All Balance");
-  const [productFilter, setProductFilter] = useState("All Products");
+  const [productFilter, setProductFilter] = useState("All Categories");
+  const [paymentTab,    setPaymentTab]    = useState("All");
   const [viewSupplier,  setViewSupplier]  = useState(null);
   const [importing,     setImporting]     = useState(false);
+  const [expandedRows,  setExpandedRows]  = useState({});
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
 
   const fetchSuppliers = async () => {
@@ -490,14 +527,14 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
   useEffect(() => { fetchSuppliers(); }, []);
 
   const productOptions = useMemo(() => {
-    const items = suppliers.flatMap((s) => getSupplierProducts(s));
-    return ["All Products", ...new Set(items)];
+    const items = suppliers.flatMap((s) => getSupplierCategories(s));
+    return ["All Categories", ...new Set(items)];
   }, [suppliers]);
 
   const filtered = useMemo(() => {
     return suppliers.filter((supplier) => {
       const q        = search.trim().toLowerCase();
-      const products = getSupplierProducts(supplier);
+      const categories = getSupplierCategories(supplier);
 
       const matchSearch =
         !q ||
@@ -517,12 +554,18 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
           : Number(supplier.totalDue || 0) <= 0);
 
       const matchProduct =
-        productFilter === "All Products" ||
-        products.some((p) => p.toLowerCase().includes(productFilter.toLowerCase()));
+        productFilter === "All Categories" ||
+        categories.some((p) => p.toLowerCase().includes(productFilter.toLowerCase()));
 
-      return matchSearch && matchState && matchBalance && matchProduct;
+      const matchPaymentTab =
+        paymentTab === "All" ||
+        (paymentTab === "Paid"
+          ? Number(supplier.totalDue || 0) <= 0 && Number(supplier.totalValue || 0) > 0
+          : Number(supplier.totalDue || 0) > 0);
+
+      return matchSearch && matchState && matchBalance && matchProduct && matchPaymentTab;
     });
-  }, [balFilter, productFilter, search, stateFilter, suppliers]);
+  }, [balFilter, paymentTab, productFilter, search, stateFilter, suppliers]);
 
   const handleAddSupplier = () =>
     onEdit ? onEdit(null) : navigate("/suppliers/create");
@@ -545,7 +588,8 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
     accountNo: ["accountnumber", "bankaccountno"],
     ifscCode: ["ifsc"],
     upiId: ["upi"],
-    productsSupplied: ["products", "productssupplied"],
+    categories: ["category", "categories", "products", "productssupplied"],
+    productNames: ["productname", "productnames", "item", "items", "productsname"],
     brands: ["brand", "brandssupplied"],
     internalNotes: ["notes", "remark", "remarks"],
   };
@@ -598,7 +642,11 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
             upiId: String(mapped.upiId || "").trim(),
             brands: String(mapped.brands || "").trim(),
             internalNotes: String(mapped.internalNotes || "").trim(),
-            productsSupplied: String(mapped.productsSupplied || "")
+            categories: String(mapped.categories || "")
+              .split(/[|,;/]/)
+              .map((p) => p.trim())
+              .filter(Boolean),
+            productNames: String(mapped.productNames || "")
               .split(/[|,;/]/)
               .map((p) => p.trim())
               .filter(Boolean),
@@ -633,14 +681,18 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
   const handleEditSupplierProduct = (supplier) => {
     const supplierId = supplier?._id;
     const latestPurchase = purchases
-      .filter((purchase) => (purchase?.supplierId?._id || purchase?.supplierId) === supplierId)
+      .filter((purchase) => String(purchase?.supplierId?._id || purchase?.supplierId || "") === String(supplierId || ""))
       .sort((a, b) => new Date(b?.createdAt || b?.invoiceDate || 0) - new Date(a?.createdAt || a?.invoiceDate || 0))[0];
+    if (!latestPurchase?._id && !latestPurchase?.id) {
+      toast.error("No existing purchase found for this supplier to edit.");
+      return;
+    }
 
     navigate("/suppliers/products", {
       state: {
         supplierId,
         supplier,
-        editPurchase: latestPurchase || null,
+        editPurchase: latestPurchase,
       },
     });
   };
@@ -657,6 +709,23 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
         editPurchase: purchase,
       },
     });
+  };
+
+  const toggleExpand = (supplierId) => {
+    setExpandedRows((prev) => ({ ...prev, [supplierId]: !prev[supplierId] }));
+  };
+
+  const handleDeletePurchase = async (purchase) => {
+    if (!purchase?._id) return;
+    const ok = window.confirm(`Delete invoice ${purchase.invoiceNo || purchase.grnNo || ""}?`);
+    if (!ok) return;
+    try {
+      await deletePurchase(purchase._id);
+      toast.success("Invoice deleted");
+      fetchSuppliers();
+    } catch {
+      toast.error("Failed to delete invoice");
+    }
   };
 
   const handlePay = (supplier) =>
@@ -689,20 +758,15 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
     backgroundRepeat: "no-repeat",
     backgroundPosition: "right 8px center",
     fontFamily: "inherit",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    colorScheme: "normal",
   };
 
-  const HEADERS = [
-    { label: "S.NO",           w: 52  },
-    { label: "SUPPLIER NAME",  w: 160 },
-    { label: "CONTACT PERSON", w: 130 },
-    { label: "MOBILE",         w: 120 },
-    { label: "PRODUCTS",       w: 110 },
-    { label: "TERMS",          w: 80,  right: true },
-    { label: "TOTAL PURCHASE", w: 125, right: true },
-    { label: "PAYABLE",        w: 100, right: true },
-    { label: "RATING",         w: 100, right: true },
-    { label: "ACTIONS",        w: 100, right: true },
-  ];
+  const optionStyle = {
+    color: T.text,
+    background: T.white,
+  };
 
   return (
     <Box sx={{ fontFamily: "'Noto Sans', sans-serif" }}>
@@ -778,18 +842,18 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
 
         <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={selectStyle}>
           {["All States", "Tamil Nadu", "Karnataka", "Gujarat", "Andhra Pradesh", "Kerala", "Maharashtra"].map((o) => (
-            <option key={o}>{o}</option>
+            <option key={o} style={optionStyle}>{o}</option>
           ))}
         </select>
 
         <select value={balFilter} onChange={(e) => setBalFilter(e.target.value)} style={selectStyle}>
           {["All Balance", "Has Payable", "Cleared"].map((o) => (
-            <option key={o}>{o}</option>
+            <option key={o} style={optionStyle}>{o}</option>
           ))}
         </select>
 
         <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)} style={selectStyle}>
-          {productOptions.map((o) => <option key={o}>{o}</option>)}
+          {productOptions.map((o) => <option key={o} style={optionStyle}>{o}</option>)}
         </select>
       </Box>
 
@@ -800,57 +864,140 @@ const SupplierDetails = ({ onEdit, onStatsChange }) => {
         borderTop: "none",
         borderRadius: "0 0 10px 10px",
         boxShadow: "0 1px 4px rgba(0,0,0,.05)",
-        overflowX: "auto",
+        overflow: "hidden",
       }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
-          <thead>
-            <tr style={{ background: T.headerBg }}>
-              {HEADERS.map(({ label, w, right }) => (
-                <th
-                  key={label}
-                  style={{
-                    width: w,
-                    padding: "9px 10px",
-                    textAlign: right ? "right" : "left",
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: T.muted,
-                    textTransform: "uppercase",
-                    letterSpacing: ".05em",
-                    borderBottom: `2px solid ${T.border}`,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {[...filtered].reverse().map((supplier, index) => (
-              <SupplierRow
-                key={supplier._id}
-                supplier={supplier}
-                serial={filtered.length - index}
-                onView={setViewSupplier}
-                onEditProduct={handleEditSupplierProduct}
-                onPay={handlePay}
-                onDelete={askDelete}
-              />
+        <Box sx={{ px: 2.5, py: 1.8, borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
+            <Box sx={{ width: 12, height: 12, borderRadius: "999px", background: "#0891b2" }} />
+            <Typography sx={{ fontSize: 15, lineHeight: 1.2, fontWeight: 700, color: T.dark }}>
+              Dealers
+            </Typography>
+            <Box sx={{ px: 1.1, height: 28, borderRadius: "8px", border: `1px solid #99d7ea`, color: "#0e7490", fontSize: 13, fontWeight: 700, display: "inline-flex", alignItems: "center" }}>
+              {filtered.length}
+            </Box>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1.2 }}>
+            {["All", "Pending", "Paid"].map((tab) => (
+              <Box
+                key={tab}
+                onClick={() => setPaymentTab(tab)}
+                sx={{
+                  px: 2, py: 0.7, borderRadius: "10px", cursor: "pointer",
+                  fontSize: 13, fontWeight: 700,
+                  color: paymentTab === tab ? "#0891b2" : T.muted,
+                  border: paymentTab === tab ? "1px solid #99d7ea" : "1px solid transparent",
+                  background: paymentTab === tab ? "#e6f7fb" : "transparent",
+                }}
+              >
+                {tab}
+              </Box>
             ))}
+          </Box>
+        </Box>
+
+        <Box sx={{ overflow: "hidden" }}>
+          <Box sx={{ width: "100%" }}>
+            {/* ── FIXED: header grid matches data row grid ── */}
+            <Box sx={{ display: "grid", gridTemplateColumns: "52px 60px 1.4fr 1fr 1fr 1.1fr 1.2fr 1.2fr 1.1fr 120px", px: 2.5, py: 1.3, background: T.headerBg, borderBottom: `1px solid ${T.border}` }}>
+              {["", "SNO", "NAME", "MOBILE", "CITY", "GSTIN", "TOTAL AMOUNT", "OUTSTANDING", "PAYMENT TERMS", "ACTIONS"].map((h, i) => (
+                <Typography key={h + i} sx={{ fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>
+                  {h}
+                </Typography>
+              ))}
+            </Box>
+
+            {[...filtered].reverse().map((supplier, index) => {
+              const supplierId = supplier._id;
+              const isOpen = Boolean(expandedRows[supplierId]);
+              const invoices = purchases
+                .filter((p) => String(p.supplierId?._id || p.supplierId || "") === String(supplierId))
+                .filter((p) => !p.isDraft)
+                .sort((a, b) => new Date(b.createdAt || b.invoiceDate || 0) - new Date(a.createdAt || a.invoiceDate || 0));
+              return (
+                <Box key={supplierId} sx={{ borderBottom: `1px solid ${T.border}` }}>
+                  {/* ── FIXED: data row grid matches header grid ── */}
+                  <Box sx={{ display: "grid", gridTemplateColumns: "52px 60px 1.4fr 1fr 1fr 1.1fr 1.2fr 1.2fr 1.1fr 120px", px: 2.5, py: 1.8, alignItems: "center" }}>
+                    <Box onClick={() => toggleExpand(supplierId)} sx={{ width: 30, height: 30, borderRadius: "999px", background: T.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, lineHeight: 1, fontWeight: 700 }}>
+                      {isOpen ? "˄" : "˅"}
+                    </Box>
+                    <Typography sx={{ fontSize: 14, color: T.muted }}>{filtered.length - index}</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark }}>{supplier.companyName || supplier.name}</Typography>
+                    <Typography sx={{ fontSize: 13, color: T.text }}>{supplier.companyPhone || supplier.phone || "-"}</Typography>
+                    <Typography sx={{ fontSize: 13, color: T.text }}>{supplier.city || "-"}</Typography>
+                    <Typography sx={{ fontSize: 13, color: T.text }}>{supplier.gstin || "-"}</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, color: T.dark }}>{fmt(supplier.totalValue || 0)}</Typography>
+                    <Typography sx={{ fontSize: 14, fontWeight: 700, color: Number(supplier.totalDue || 0) > 0 ? T.danger : T.success }}>
+                      {fmt(supplier.totalDue || 0)}
+                    </Typography>
+                    <Typography sx={{ fontSize: 13, color: T.text }}>{supplier.paymentTerms || "-"}</Typography>
+                    <Box sx={{ display: "flex", gap: 1.2 }}>
+                      <Typography onClick={() => askDelete(supplier._id, supplier.companyName || supplier.name)} sx={{ fontSize: 13, fontWeight: 700, color: T.danger, cursor: "pointer" }}>
+                        Delete
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  {isOpen && (
+                    <Box sx={{ mx: 2.5, mb: 1.8, border: `1px solid ${T.border}`, borderRadius: "10px", overflow: "hidden", background: "#f8fafc" }}>
+                      <Box sx={{ px: 2, py: 1, background: "#eef4fb", borderBottom: `1px solid ${T.border}` }}>
+                        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>
+                          Invoices ({invoices.length})
+                        </Typography>
+                      </Box>
+                      {/* ── FIXED: invoice header grid matches invoice data row grid ── */}
+                      <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 1.2fr 1.1fr 1.1fr 1fr 1.5fr", px: 2, py: 1.1, borderBottom: `1px solid ${T.border}`, background: T.white }}>
+                        {["Invoice No", "Date", "Total", "Paid", "Due", "Status", "Actions"].map((h) => (
+                          <Typography key={h} sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em" }}>
+                            {h}
+                          </Typography>
+                        ))}
+                      </Box>
+                      {invoices.map((p) => {
+                        const statusLabel = Number(p.totalDue || 0) <= 0 ? "Paid" : Number(p.totalPaid || 0) > 0 ? "Partial" : "Pending";
+                        const badge = statusLabel === "Paid"
+                          ? { bg: T.successLight, color: T.success }
+                          : statusLabel === "Partial"
+                            ? { bg: T.warningLight, color: T.warning }
+                            : { bg: T.dangerLight, color: T.danger };
+                        return (
+                          <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "1.2fr 1.1fr 1.2fr 1.1fr 1.1fr 1fr 1.5fr", px: 2, py: 1.2, borderBottom: `1px solid ${T.border}`, background: T.white, "&:last-child": { borderBottom: "none" } }}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{p.invoiceNo || p.grnNo || "-"}</Typography>
+                            <Typography sx={{ fontSize: 13, color: T.text }}>{fmtDate(p.createdAt || p.invoiceDate)}</Typography>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{fmt(p.grandTotal || p.totalInvoiceAmount || 0)}</Typography>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.success }}>{fmt(p.totalPaid || 0)}</Typography>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.danger }}>{fmt(p.totalDue || 0)}</Typography>
+                            <Box sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", px: 1.1, borderRadius: "10px", background: badge.bg, color: badge.color, fontSize: 12, fontWeight: 700, width: "fit-content", height: 28 }}>
+                              {statusLabel}
+                            </Box>
+                            <Box sx={{ display: "flex", gap: 1.4, alignItems: "center" }}>
+                              <Typography onClick={() => setViewSupplier(supplier)} sx={{ fontSize: 13, fontWeight: 700, color: T.primary, cursor: "pointer" }}>View</Typography>
+                              <Typography onClick={() => handleEditPurchase(p)} sx={{ fontSize: 13, fontWeight: 700, color: "#7c3aed", cursor: "pointer" }}>Edit</Typography>
+                              <Typography onClick={() => handlePay(supplier)} sx={{ fontSize: 13, fontWeight: 700, color: "#0284c7", cursor: "pointer" }}>Pay</Typography>
+                              <Typography onClick={() => handleDeletePurchase(p)} sx={{ fontSize: 13, fontWeight: 700, color: T.danger, cursor: "pointer" }}>Delete</Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
+                      {invoices.length === 0 && (
+                        <Box sx={{ px: 2, py: 2, background: T.white }}>
+                          <Typography sx={{ fontSize: 13, color: T.muted }}>No invoices available for this supplier.</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+
             {filtered.length === 0 && (
-              <tr>
-                <td colSpan={10} style={{ padding: "56px 20px", textAlign: "center" }}>
-                  <Typography sx={{ color: T.muted, fontSize: 13 }}>
-                    {search
-                      ? "No suppliers match your search."
-                      : "No suppliers yet. Click Add Supplier to begin."}
-                  </Typography>
-                </td>
-              </tr>
+              <Box sx={{ px: 2.5, py: 7, textAlign: "center" }}>
+                <Typography sx={{ color: T.muted, fontSize: 13 }}>
+                  {search ? "No suppliers match your search." : "No suppliers yet. Click Add Supplier to begin."}
+                </Typography>
+              </Box>
             )}
-          </tbody>
-        </table>
+          </Box>
+        </Box>
 
         {filtered.length > 0 && (
           <Box sx={{

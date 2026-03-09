@@ -3,6 +3,13 @@ const mongoose = require("mongoose");
 /* ── Product line item ───────────────────────────────────────── */
 const productSchema = new mongoose.Schema({
   name:        { type: String, required: true },
+  category:    { type: String,  default: "" },
+  brand:       { type: String,  default: "" },
+  finish:      { type: String,  default: "" },
+  lengthCm:    { type: Number,  default: 0  },
+  widthCm:     { type: Number,  default: 0  },
+  piecesPerBox:{ type: Number,  default: 0  },
+  tilesPerBox: { type: Number,  default: 0  },
   size:        { type: String,  default: "" },
   ordered:     { type: Number,  default: 0  },   // Ordered (Boxes)
   received:    { type: Number,  default: 0  },   // Received (Boxes)

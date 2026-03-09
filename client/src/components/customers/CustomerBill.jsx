@@ -33,6 +33,9 @@ const emptyItem = {
   search: "",
   code: "",
   name: "",
+  category: "",
+  brand: "",
+  finish: "",
   colorDesign: "",
   quantity: "",
   boxes: "",
@@ -40,7 +43,7 @@ const emptyItem = {
   uom: "",
   price: 0,
   gst: 0,
-  discount: 0,
+  discount: "",
   gstAmount: 0,
   discountAmount: 0,
   total: 0,
@@ -48,6 +51,7 @@ const emptyItem = {
   coverageArea: 0,
   confirmed: false,
 };
+const createEmptyItem = (gst = 0) => ({ ...emptyItem, gst: Number(gst) || 0 });
 
 const defaultShopSettings = {
   invoicePrefix: "INV-",
@@ -71,6 +75,15 @@ const normalizeCustomerType = (value) => {
 
 const getCustomerSaleType = (customer) =>
   normalizeCustomerType(customer?.customerType || customer?.saleType || "Retail Customer");
+
+const getCustomerTypeDiscountPct = (customer, saleType) => {
+  if (!customer || normalizeCustomerType(saleType) === "Retail Customer") return 0;
+  const fromDealerDetails = Number(customer?.dealerDetails?.standardDiscount);
+  if (Number.isFinite(fromDealerDetails) && fromDealerDetails > 0) return fromDealerDetails;
+  const fromFlat = Number(customer?.standardDiscount);
+  if (Number.isFinite(fromFlat) && fromFlat > 0) return fromFlat;
+  return 0;
+};
 
 const getRateBySaleType = (product, saleType) => {
   const retail = Number(product?.price || 0);
@@ -187,6 +200,17 @@ const getCoveragePerBox = (product) => {
   return 0;
 };
 
+const resolveProductForItem = (item, products) => {
+  if (!item || !Array.isArray(products) || products.length === 0) return null;
+  const byId = products.find((p) => String(p._id) === String(item.productId || ""));
+  if (byId) return byId;
+  return products.find((p) => {
+    const sameName = String(p?.name || "").trim().toLowerCase() === String(item?.name || "").trim().toLowerCase();
+    const sameSize = String(p?.size || "").trim().toLowerCase() === String(item?.size || "").trim().toLowerCase();
+    return sameName && sameSize;
+  }) || null;
+};
+
 const CustomerBill = () => {
   const { user } = useAuth();
   const location = useLocation();
@@ -194,7 +218,7 @@ const CustomerBill = () => {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([createEmptyItem()]);
   const [extraGst, setExtraGst] = useState("");
   const [extraDiscount, setExtraDiscount] = useState("");
   const [loadingCharge, setLoadingCharge] = useState("");
@@ -290,13 +314,28 @@ const CustomerBill = () => {
     const incomingItems = Array.isArray(editInvoice?.items) ? editInvoice.items : [];
     setItems(
       incomingItems.map((item) => ({
+        ...(resolveProductForItem(item, products) ? {
+          coverageArea: getCoveragePerBox(resolveProductForItem(item, products)),
+          availableStock: Number(resolveProductForItem(item, products)?.stock ?? 0),
+        } : {}),
         ...emptyItem,
         ...item,
-        productId: item.productId || "",
+        productId: item.productId || resolveProductForItem(item, products)?._id || "",
+        category: item.category || resolveProductForItem(item, products)?.category || "",
+        brand: item.brand || resolveProductForItem(item, products)?.brand || "",
+        finish: item.finish || resolveProductForItem(item, products)?.finish || "",
         quantity: item.quantity ?? "",
-        boxes: item.boxes ?? "",
+        boxes:
+          item.boxes ??
+          item.box ??
+          item.boxCount ??
+          (() => {
+            const coverage = getCoveragePerBox(resolveProductForItem(item, products));
+            const qty = Number(item.quantity) || 0;
+            return qty > 0 && coverage > 0 ? Number((qty / coverage).toFixed(2)) : "";
+          })(),
         gst: Number(item.gst || 0),
-        discount: Number(item.discount || 0),
+        discount: item.discount !== undefined ? String(item.discount) : "",
         price: Number(item.price || 0),
         total: Number(item.total || 0),
         gstAmount: Number(item.gstAmount || 0),
@@ -306,13 +345,25 @@ const CustomerBill = () => {
     );
 
     setExtraGst(editInvoice?.tax !== undefined ? String(editInvoice.tax) : "");
-    setExtraDiscount(editInvoice?.charges?.extraDiscount !== undefined ? String(editInvoice.charges.extraDiscount) : "");
-    setLoadingCharge(editInvoice?.charges?.loading !== undefined ? String(editInvoice.charges.loading) : "");
-    setTransportCharge(editInvoice?.charges?.transport !== undefined ? String(editInvoice.charges.transport) : "");
+    setExtraDiscount(
+      editInvoice?.charges?.extraDiscount !== undefined && Number(editInvoice.charges.extraDiscount) !== 0
+        ? String(editInvoice.charges.extraDiscount)
+        : ""
+    );
+    setLoadingCharge(
+      editInvoice?.charges?.loading !== undefined && Number(editInvoice.charges.loading) !== 0
+        ? String(editInvoice.charges.loading)
+        : ""
+    );
+    setTransportCharge(
+      editInvoice?.charges?.transport !== undefined && Number(editInvoice.charges.transport) !== 0
+        ? String(editInvoice.charges.transport)
+        : ""
+    );
     setPaymentMethod(editInvoice?.payment?.method || "CASH");
     setPaymentType(editInvoice?.payment?.paymentType || "Full Payment");
     setPartialAmount(editInvoice?.payment?.paidAmount !== undefined ? String(editInvoice.payment.paidAmount || "") : "");
-  }, [location.state]);
+  }, [location.state, products]);
 
   useEffect(() => {
     const details = selectedCustomer?.dealerDetails || {};
@@ -349,14 +400,16 @@ const CustomerBill = () => {
 
   const recalcRow = (row) => {
     const qty = Number(row.quantity) || 0;
+    const coveragePerBox = Number(row.coverageArea || 0);
+    const boxes = qty > 0 && coveragePerBox > 0 ? Number((qty / coveragePerBox).toFixed(2)) : "";
     const price = Number(row.price) || 0;
     const base = qty * price;
     const gstAmount = (base * (Number(row.gst) || 0)) / 100;
     const discountAmount = (base * (Number(row.discount) || 0)) / 100;
-    return { ...row, gstAmount, discountAmount, total: base + gstAmount - discountAmount };
+    return { ...row, boxes, gstAmount, discountAmount, total: base + gstAmount - discountAmount };
   };
 
-  const addItem = () => setItems((prev) => [...prev, { ...emptyItem, gst: Number(extraGst) || 0 }]);
+  const addItem = () => setItems((prev) => [...prev, createEmptyItem(extraGst)]);
   const removeItem = (index) => setItems((prev) => prev.filter((_, i) => i !== index));
   const setRow = (index, nextRow) => setItems((prev) => prev.map((row, i) => (i === index ? recalcRow(nextRow) : row)));
 
@@ -364,7 +417,7 @@ const CustomerBill = () => {
     const current = items[index];
     const coverageArea = getCoveragePerBox(product);
     const qty = Number(current.quantity) || 0;
-    const boxes = qty > 0 && coverageArea > 0 ? Number((qty / coverageArea).toFixed(2)) : current.boxes || "";
+    const boxes = qty > 0 && coverageArea > 0 ? Number((qty / coverageArea).toFixed(2)) : "";
     setRow(index, {
       ...current,
       productId: product._id,
@@ -373,6 +426,9 @@ const CustomerBill = () => {
       name: product.name || "",
       size: product.size || "",
       uom: product.uom || "",
+      category: product.category || "",
+      brand: product.brand || "",
+      finish: product.finish || "",
       price: getRateBySaleType(product, billMeta.saleType),
       gst: Number(product.gst ?? extraGst ?? 0),
       availableStock: Number(product.stock ?? 0),
@@ -380,6 +436,7 @@ const CustomerBill = () => {
       quantity: current.quantity || "",
       boxes,
       colorDesign: product.colorDesign || "",
+      discount: current.discount !== undefined && current.discount !== "" ? current.discount : "",
       confirmed: false,
     });
   };
@@ -392,9 +449,27 @@ const CustomerBill = () => {
         const product = products.find((p) => p._id === row.productId);
         if (!product) return row;
         const nextPrice = getRateBySaleType(product, billMeta.saleType);
-        if (Number(row.price || 0) === nextPrice) return row;
+        const coverageArea = getCoveragePerBox(product);
+        const nextBoxes =
+          row.boxes !== "" && row.boxes !== undefined
+            ? row.boxes
+            : Number(row.quantity || 0) > 0 && coverageArea > 0
+              ? Number((Number(row.quantity) / coverageArea).toFixed(2))
+              : "";
+        if (
+          Number(row.price || 0) === nextPrice &&
+          Number(row.coverageArea || 0) === Number(coverageArea || 0) &&
+          Number(row.availableStock ?? 0) === Number(product.stock ?? 0) &&
+          String(row.boxes ?? "") === String(nextBoxes ?? "")
+        ) return row;
         changed = true;
-        return recalcRow({ ...row, price: nextPrice });
+        return recalcRow({
+          ...row,
+          price: nextPrice,
+          coverageArea,
+          availableStock: Number(product.stock ?? 0),
+          boxes: nextBoxes,
+        });
       });
       return changed ? next : prev;
     });
@@ -417,18 +492,7 @@ const CustomerBill = () => {
       row.boxes = qty > 0 && coveragePerBox > 0 ? Number((qty / coveragePerBox).toFixed(2)) : "";
     }
 
-    if (field === "boxes") {
-      if (isTransientNumberInput(value)) {
-        row.quantity = "";
-        if (field !== "confirmed") row.confirmed = false;
-        setRow(index, row);
-        return;
-      }
-      const boxes = Number(value) || 0;
-      row.quantity = boxes > 0 && coveragePerBox > 0 ? Number((boxes * coveragePerBox).toFixed(2)) : "";
-    }
-
-    if (field === "quantity" || field === "boxes") {
+    if (field === "quantity") {
       const qty = Number(row.quantity) || 0;
       const stockVal = row.availableStock;
       const max = Number(stockVal);
@@ -469,15 +533,20 @@ const CustomerBill = () => {
     () => confirmedItems.reduce((sum, item) => sum + Number(item.discountAmount || 0), 0),
     [confirmedItems]
   );
+  const customerTypeDiscountPct = useMemo(
+    () => getCustomerTypeDiscountPct(selectedCustomer, billMeta.saleType),
+    [selectedCustomer, billMeta.saleType]
+  );
 
   const totals = useMemo(() => {
     const base = confirmedItems.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.price || 0), 0);
     const itemGstAmount = confirmedItems.reduce((sum, item) => sum + Number(item.gstAmount || 0), 0);
     const subTotal = base + itemGstAmount - itemDiscountAmount;
+    const customerTypeDiscountAmount = (subTotal * (Number(customerTypeDiscountPct) || 0)) / 100;
     const loadingAmount = Number(loadingCharge) || 0;
     const transportAmount = Number(transportCharge) || 0;
     const extraDiscountAmount = Number(extraDiscount) || 0;
-    const taxable = Math.max(0, subTotal + loadingAmount + transportAmount - extraDiscountAmount);
+    const taxable = Math.max(0, subTotal + loadingAmount + transportAmount - extraDiscountAmount - customerTypeDiscountAmount);
     const extraGstAmount = (taxable * (Number(extraGst) || 0)) / 100;
     const finalAmount = taxable + extraGstAmount;
 
@@ -485,6 +554,7 @@ const CustomerBill = () => {
       base,
       itemGstAmount,
       subTotal,
+      customerTypeDiscountAmount,
       loadingAmount,
       transportAmount,
       extraDiscountAmount,
@@ -492,7 +562,7 @@ const CustomerBill = () => {
       extraGstAmount,
       finalAmount,
     };
-  }, [confirmedItems, extraDiscount, extraGst, itemDiscountAmount, loadingCharge, transportCharge]);
+  }, [confirmedItems, customerTypeDiscountPct, extraDiscount, extraGst, itemDiscountAmount, loadingCharge, transportCharge]);
 
   useEffect(() => {
     if (paymentType !== "Partial") {
@@ -586,8 +656,11 @@ const CustomerBill = () => {
         productId: item.productId,
         code: item.code,
         name: item.name,
+        category: item.category,
+        finish: item.finish,
         colorDesign: item.colorDesign,
         quantity: Number(item.quantity) || 0,
+        boxes: Number(item.boxes) || 0,
         size: item.size,
         uom: item.uom,
         price: Number(item.price) || 0,
@@ -600,11 +673,13 @@ const CustomerBill = () => {
       tax: Number(extraGst) || 0,
       discount: 0,
       taxAmount: totals.extraGstAmount,
-      discountAmount: totals.extraDiscountAmount + itemDiscountAmount,
+      discountAmount: totals.extraDiscountAmount + itemDiscountAmount + totals.customerTypeDiscountAmount,
       charges: {
         loading: totals.loadingAmount,
         transport: totals.transportAmount,
         extraDiscount: totals.extraDiscountAmount,
+        customerTypeDiscount: totals.customerTypeDiscountAmount,
+        customerTypeDiscountPct: customerTypeDiscountPct,
       },
       notes: billMeta.notes,
       salesPerson: billMeta.salesPerson,
@@ -672,7 +747,7 @@ const CustomerBill = () => {
   const resetBillForm = () => {
     const savedSettings = getSavedSettings();
     setSelectedCustomer(null);
-    setItems([]);
+    setItems([createEmptyItem(savedSettings.defaultTax)]);
     setExtraGst(savedSettings.defaultTax === 0 ? "" : String(savedSettings.defaultTax));
     setExtraDiscount(savedSettings.defaultDiscount === 0 ? "" : String(savedSettings.defaultDiscount));
     setLoadingCharge("");
@@ -696,12 +771,12 @@ const CustomerBill = () => {
     });
   };
 
-
   const summaryRows = [
     ["Subtotal", `Rs.${fmt(totals.subTotal)}`],
     ["Item Discounts", `-Rs.${fmt(itemDiscountAmount)}`],
     ["Loading Charges", `+Rs.${fmt(totals.loadingAmount)}`],
     ["Special Discount", `-Rs.${fmt(totals.extraDiscountAmount)}`],
+    [`Customer Type Discount (${fmt(customerTypeDiscountPct)}%)`, `-Rs.${fmt(totals.customerTypeDiscountAmount)}`],
     ["Transport", `+Rs.${fmt(totals.transportAmount)}`],
     [`GST (${Number(extraGst) || 0}%)`, `Rs.${fmt(totals.extraGstAmount)}`],
     ["Total", `Rs.${fmt(totals.finalAmount)}`, true],
@@ -752,8 +827,8 @@ const CustomerBill = () => {
           alignItems: "start",
         }}
       >
-        <Box>
-          <Card sx={sectionCardSx}>
+        <Box sx={{ display: "contents" }}>
+          <Card sx={{ ...sectionCardSx, gridColumn: "1 / -1", gridRow: { lg: 1 } }}>
             <Box sx={cardHeaderSx}>
               <Typography sx={panelTitleSx}>
                 <Box component="span" sx={{ color: "#a78bfa" }}>🧾</Box>
@@ -841,7 +916,7 @@ const CustomerBill = () => {
                 </Box>
               </Box>
 
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5, mb: 1.5 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5, mb: 1.5 }}>
                 <Box>
                   <Typography sx={fieldLabelSx}>Customer Name *</Typography>
                   <Autocomplete
@@ -864,9 +939,6 @@ const CustomerBill = () => {
                     InputProps={{ readOnly: true }}
                   />
                 </Box>
-              </Box>
-
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5 }}>
                 <Box>
                   <Typography sx={fieldLabelSx}>GSTIN (for Business)</Typography>
                   <TextField
@@ -878,30 +950,19 @@ const CustomerBill = () => {
                   />
                 </Box>
                 <Box>
-                  <Typography sx={fieldLabelSx}>Site / Delivery Address</Typography>
+                  <Typography sx={fieldLabelSx}>Dealer / Business Tier</Typography>
                   <TextField
                     fullWidth
                     size="small"
-                    value={billMeta.siteAddress}
-                    onChange={(e) => setBillMeta((prev) => ({ ...prev, siteAddress: e.target.value }))}
+                    value={billMeta.dealerTier}
+                    onChange={(e) => setBillMeta((prev) => ({ ...prev, dealerTier: e.target.value }))}
                     sx={inputSx}
-                    placeholder="Site address"
                   />
                 </Box>
               </Box>
 
               {isBusinessSale ? (
-                <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" }, gap: 1.5 }}>
-                  <Box>
-                    <Typography sx={fieldLabelSx}>Dealer / Business Tier</Typography>
-                    <TextField
-                      fullWidth
-                      size="small"
-                      value={billMeta.dealerTier}
-                      onChange={(e) => setBillMeta((prev) => ({ ...prev, dealerTier: e.target.value }))}
-                      sx={inputSx}
-                    />
-                  </Box>
+                <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
                   <Box>
                     <Typography sx={fieldLabelSx}>Payment Terms</Typography>
                     <TextField
@@ -951,10 +1012,34 @@ const CustomerBill = () => {
                   </Box>
                 </Box>
               ) : null}
+
+              <Box sx={{ mt: 1.5, display: "grid", gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" }, gap: 1.5 }}>
+                <Box>
+                  <Typography sx={fieldLabelSx}>Site / Delivery Address</Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={billMeta.siteAddress}
+                    onChange={(e) => setBillMeta((prev) => ({ ...prev, siteAddress: e.target.value }))}
+                    sx={inputSx}
+                    placeholder="Site address"
+                  />
+                </Box>
+              </Box>
             </Box>
           </Card>
 
-          <Card sx={{ ...sectionCardSx, mt: 2.2, background: "#f3f5f7", borderRadius: "18px" }}>
+          {/* ── Tile Items — only TableHead column widths changed from original ── */}
+          <Card
+            sx={{
+              ...sectionCardSx,
+              mt: 2.2,
+              background: "#f3f5f7",
+              borderRadius: "18px",
+              gridColumn: "1 / -1",
+              gridRow: { lg: 2 },
+            }}
+          >
             <Box sx={cardHeaderSx}>
               <Typography sx={panelTitleSx}>
                 <Inventory2OutlinedIcon sx={{ color: "#b45309", fontSize: 16 }} />
@@ -976,16 +1061,23 @@ const CustomerBill = () => {
                 >
                   <TableHead>
                     <TableRow sx={{ background: primary }}>
-                      {["Tile / Product", "Size", "Qty(sqft)", "Boxes", "Rate/sqft", "Disc%", "Amount(Rs)", ""].map((label) => (
+                      {[
+                        { label: "Tile / Product", w: "17%" },
+                        { label: "Category",       w: "8%"  },
+                        { label: "Brand",          w: "7%"  },
+                        { label: "Finish",         w: "7%"  },
+                        { label: "Color/Design",   w: "8%"  },
+                        { label: "Size",           w: "6%"  },
+                        { label: "Qty(sqft)",      w: "9%"  },
+                        { label: "Boxes",          w: "7%"  },
+                        { label: "Rate/sqft",      w: "7%"  },
+                        { label: "Disc%",          w: "9%"  },
+                        { label: "Amount(Rs)",     w: "6%"  },
+                        { label: "",               w: "7%"  },
+                      ].map(({ label, w }) => (
                         <TableCell
                           key={label}
-                          sx={{
-                            color: "#fff",
-                            fontWeight: 700,
-                            py: 1.5,
-                            whiteSpace: "nowrap",
-                            fontSize: 12,
-                          }}
+                          sx={{ color: "#fff", fontWeight: 700, py: 1.5, whiteSpace: "nowrap", fontSize: 12, width: w }}
                         >
                           {label}
                         </TableCell>
@@ -1005,7 +1097,7 @@ const CustomerBill = () => {
                               : "";
                       return (
                         <TableRow key={`${item.productId || "row"}-${index}`} hover>
-                          <TableCell sx={{ width: "31%", verticalAlign: "top", position: "relative", py: 0.9 }}>
+                          <TableCell sx={{ verticalAlign: "top", position: "relative", py: 0.9 }}>
                             <TextField
                               select
                               size="small"
@@ -1027,7 +1119,47 @@ const CustomerBill = () => {
                             </TextField>
                           </TableCell>
 
-                          <TableCell sx={{ width: "10%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={item.category || ""}
+                              sx={inputSx}
+                              InputProps={{ readOnly: true }}
+                            />
+                          </TableCell>
+
+                          <TableCell sx={{ py: 0.9 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={item.brand || ""}
+                              sx={inputSx}
+                              InputProps={{ readOnly: true }}
+                            />
+                          </TableCell>
+
+                          <TableCell sx={{ py: 0.9 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={item.finish || ""}
+                              sx={inputSx}
+                              InputProps={{ readOnly: true }}
+                            />
+                          </TableCell>
+
+                          <TableCell sx={{ py: 0.9 }}>
+                            <TextField
+                              size="small"
+                              fullWidth
+                              value={item.colorDesign || ""}
+                              sx={inputSx}
+                              InputProps={{ readOnly: true }}
+                            />
+                          </TableCell>
+
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
@@ -1038,7 +1170,7 @@ const CustomerBill = () => {
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "11%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
@@ -1051,20 +1183,19 @@ const CustomerBill = () => {
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "10%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
                               type="number"
                               value={boxesValue}
-                              onChange={(e) => handleItemChange(index, "boxes", e.target.value)}
                               sx={inputSx}
-                              inputProps={{ min: 0, step: "0.01" }}
+                              inputProps={{ min: 0, step: "0.01", readOnly: true }}
                               placeholder="0"
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "11%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
@@ -1075,7 +1206,7 @@ const CustomerBill = () => {
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "9%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
@@ -1083,10 +1214,11 @@ const CustomerBill = () => {
                               value={item.discount}
                               onChange={(e) => handleItemChange(index, "discount", e.target.value)}
                               sx={inputSx}
+                              placeholder="0"
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "12%", py: 0.9 }}>
+                          <TableCell sx={{ py: 0.9 }}>
                             <TextField
                               size="small"
                               fullWidth
@@ -1096,7 +1228,7 @@ const CustomerBill = () => {
                             />
                           </TableCell>
 
-                          <TableCell sx={{ width: "6%", whiteSpace: "nowrap", textAlign: "center", py: 0.9 }}>
+                          <TableCell sx={{ whiteSpace: "nowrap", textAlign: "center", py: 0.9 }}>
                             <IconButton
                               size="small"
                               onClick={() => toggleConfirm(index)}
@@ -1115,12 +1247,12 @@ const CustomerBill = () => {
                     {items.length === 0 && (
                       <TableRow>
                         <TableCell
-                          colSpan={8}
+                          colSpan={12}
                           align="center"
                           sx={{
-                            py: 6.5,
+                            py: 2.8,
                             color: muted,
-                            fontSize: 30,
+                            fontSize: 18,
                             borderBottom: "none",
                             background: "transparent",
                           }}
@@ -1153,12 +1285,18 @@ const CustomerBill = () => {
             </Box>
           </Card>
 
-          {isBusinessSale ? (
-            <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
+          <Box
+            sx={{
+              mt: { xs: 2.2, lg: 0 },
+              gridColumn: { xs: "1 / -1", lg: "1 / 2" },
+              gridRow: { lg: 3 },
+            }}
+          >
+            <Card sx={sectionCardSx}>
               <Box sx={cardHeaderSx}>
                 <Typography sx={panelTitleSx}>
                   <Box component="span" sx={{ color: "#7c3aed" }}>+</Box>
-                  Bulk Charges
+                  Charges
                 </Typography>
               </Box>
               <Box sx={{ p: 2.1 }}>
@@ -1171,6 +1309,7 @@ const CustomerBill = () => {
                       type="number"
                       value={loadingCharge}
                       onChange={(e) => setLoadingCharge(e.target.value)}
+                      placeholder="0"
                       sx={inputSx}
                     />
                   </Box>
@@ -1182,6 +1321,7 @@ const CustomerBill = () => {
                       type="number"
                       value={transportCharge}
                       onChange={(e) => setTransportCharge(e.target.value)}
+                      placeholder="0"
                       sx={inputSx}
                     />
                   </Box>
@@ -1208,6 +1348,7 @@ const CustomerBill = () => {
                       type="number"
                       value={partialAmount}
                       onChange={(e) => setPartialAmount(e.target.value)}
+                      placeholder="0"
                       sx={inputSx}
                     />
                   </Box>
@@ -1219,6 +1360,7 @@ const CustomerBill = () => {
                       type="number"
                       value={extraDiscount}
                       onChange={(e) => setExtraDiscount(e.target.value)}
+                      placeholder="0"
                       sx={inputSx}
                     />
                   </Box>
@@ -1236,15 +1378,96 @@ const CustomerBill = () => {
                 </Box>
               </Box>
             </Card>
-          ) : null}
+
+            <Card sx={{ ...sectionCardSx, mt: 1.2 }}>
+              <Box sx={cardHeaderSx}>
+                <Typography sx={panelTitleSx}>
+                  <Box component="span" sx={{ color: "#ef4444" }}>*</Box>
+                  Quick Tile Calculator
+                </Typography>
+              </Box>
+
+              <Box sx={{ p: 2.1 }}>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Room Length (ft)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={calculator.length}
+                      onChange={(e) => setCalculator((prev) => ({ ...prev, length: e.target.value }))}
+                      sx={inputSx}
+                      placeholder="0"
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Room Width (ft)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={calculator.width}
+                      onChange={(e) => setCalculator((prev) => ({ ...prev, width: e.target.value }))}
+                      sx={inputSx}
+                      placeholder="0"
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Wastage %</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={calculator.wastage}
+                      onChange={(e) => setCalculator((prev) => ({ ...prev, wastage: e.target.value }))}
+                      sx={inputSx}
+                      placeholder="0"
+                    />
+                  </Box>
+                  <Box>
+                    <Typography sx={fieldLabelSx}>Coverage/Box (sqft)</Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={calculator.coverage}
+                      onChange={(e) => setCalculator((prev) => ({ ...prev, coverage: e.target.value }))}
+                      sx={inputSx}
+                      placeholder="0"
+                    />
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 1.6,
+                    p: 1.2,
+                    borderRadius: "8px",
+                    background: "#e8f5ee",
+                    color: "#166534",
+                    fontSize: 12,
+                  }}
+                >
+                  <strong>Room Area:</strong> {fmt(calculatorResult.area)} sqft
+                  {"  |  "}
+                  <strong>With {calculator.wastage || 0}% wastage:</strong> {fmt(calculatorResult.areaWithWastage)} sqft
+                  {"  |  "}
+                  <strong>Boxes needed:</strong> {calculatorResult.boxesNeeded} boxes
+                </Box>
+              </Box>
+            </Card>
+          </Box>
 
         </Box>
 
-        <Box>
-          <Card sx={sectionCardSx}>
+        <Box sx={{ display: "contents" }}>
+          <Card
+            sx={{
+              ...sectionCardSx,
+              gridColumn: { xs: "1 / -1", lg: "2 / 3" },
+              gridRow: { lg: 3 },
+            }}
+          >
             <Box sx={cardHeaderSx}>
               <Typography sx={panelTitleSx}>
-                <Box component="span" sx={{ color: "#d97706" }}>ðŸ’°</Box>
+                <Box component="span" sx={{ color: "#d97706" }}>💰</Box>
                 Bill Summary
               </Typography>
             </Box>
@@ -1321,80 +1544,6 @@ const CustomerBill = () => {
             </Box>
           </Card>
 
-          <Card sx={{ ...sectionCardSx, mt: 2.2 }}>
-            <Box sx={cardHeaderSx}>
-              <Typography sx={panelTitleSx}>
-                <Box component="span" sx={{ color: "#ef4444" }}>🧮</Box>
-                Quick Tile Calculator
-              </Typography>
-            </Box>
-
-            <Box sx={{ p: 2.1 }}>
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1.5 }}>
-                <Box>
-                  <Typography sx={fieldLabelSx}>Room Length (ft)</Typography>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={calculator.length}
-                    onChange={(e) => setCalculator((prev) => ({ ...prev, length: e.target.value }))}
-                    sx={inputSx}
-                    placeholder="0"
-                  />
-                </Box>
-                <Box>
-                  <Typography sx={fieldLabelSx}>Room Width (ft)</Typography>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={calculator.width}
-                    onChange={(e) => setCalculator((prev) => ({ ...prev, width: e.target.value }))}
-                    sx={inputSx}
-                    placeholder="0"
-                  />
-                </Box>
-                <Box>
-                  <Typography sx={fieldLabelSx}>Wastage %</Typography>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={calculator.wastage}
-                    onChange={(e) => setCalculator((prev) => ({ ...prev, wastage: e.target.value }))}
-                    sx={inputSx}
-                    placeholder="0"
-                  />
-                </Box>
-                <Box>
-                  <Typography sx={fieldLabelSx}>Coverage/Box (sqft)</Typography>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={calculator.coverage}
-                    onChange={(e) => setCalculator((prev) => ({ ...prev, coverage: e.target.value }))}
-                    sx={inputSx}
-                    placeholder="0"
-                  />
-                </Box>
-              </Box>
-
-              <Box
-                sx={{
-                  mt: 1.6,
-                  p: 1.2,
-                  borderRadius: "8px",
-                  background: "#e8f5ee",
-                  color: "#166534",
-                  fontSize: 12,
-                }}
-              >
-                <strong>Room Area:</strong> {fmt(calculatorResult.area)} sqft
-                {"  |  "}
-                <strong>With {calculator.wastage || 0}% wastage:</strong> {fmt(calculatorResult.areaWithWastage)} sqft
-                {"  |  "}
-                <strong>Boxes needed:</strong> {calculatorResult.boxesNeeded} boxes
-              </Box>
-            </Box>
-          </Card>
         </Box>
       </Box>
 
@@ -1403,5 +1552,3 @@ const CustomerBill = () => {
 };
 
 export default CustomerBill;
-
-
