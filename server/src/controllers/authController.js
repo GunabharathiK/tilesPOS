@@ -91,6 +91,7 @@ exports.login = async (req, res) => {
     }
 
     const user = await User.findOne({ phone: normalizedPhone });
+    console.log(user)
     if (!user) return res.status(401).json({ error: "Invalid phone number or password" });
 
     const match = await user.matchPassword(password);
