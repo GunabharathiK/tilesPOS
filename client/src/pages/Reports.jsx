@@ -27,7 +27,7 @@ import { deleteInvoice, getInvoices } from "../services/invoiceService";
 import { deleteProduct, getProducts } from "../services/productService";
 import { deleteCustomer, getCustomers, updateCustomer } from "../services/customerService";
 import { formatCurrency, getInvoicePaymentMetrics } from "../utils/invoiceMetrics";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 /* ── Design tokens (matches CustomerPayments) ── */
 const T = {
@@ -193,6 +193,7 @@ const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 /* ═══════════════════════════════════════════════════ */
 const Reports = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading,               setLoading]               = useState(true);
   const [invoices,              setInvoices]              = useState([]);
   const [products,              setProducts]              = useState([]);
@@ -215,6 +216,12 @@ const Reports = () => {
       } finally { setLoading(false); }
     })();
   }, []);
+
+  useEffect(() => {
+    const target = location.state?.report;
+    if (!target) return;
+    if (reportDefs.some((r) => r.key === target)) setActiveReport(target);
+  }, [location.state]);
 
   useEffect(() => { setPage(1); }, [activeReport, searchTerm, pageSize, period]);
 

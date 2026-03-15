@@ -32,6 +32,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import PersonAddAlt1Icon from "@mui/icons-material/PersonAddAlt1";
 import PhoneIcon from "@mui/icons-material/Phone";
 import CloseIcon from "@mui/icons-material/Close";
+import HistoryIcon from "@mui/icons-material/History";
 import toast from "react-hot-toast";
 import { getProducts } from "../../services/productService";
 import { getCustomers, saveCustomer } from "../../services/customerService";
@@ -238,6 +239,13 @@ const CustomerBill = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const isBulkOrder = location.pathname === "/customers/bulk-order";
+  const allowedCustomerTypes = useMemo(
+    () => new Set(isBulkOrder ? ["Dealer", "Contractor", "Builder / Project"] : ["Retail Customer"]),
+    [isBulkOrder]
+  );
+  const defaultSaleType = isBulkOrder ? "Dealer" : "Retail Customer";
+  const historyReportKey = isBulkOrder ? "bulk" : "sales";
   const editInvoice = location.state?.editInvoice || null;
   const isEditMode = Boolean(editInvoice?._id);
   const [products, setProducts] = useState([]);
@@ -266,7 +274,7 @@ const CustomerBill = () => {
   const [billMeta, setBillMeta] = useState({
     date: new Date().toISOString().slice(0,10),
     salesPerson: user?.name || salesPersonOptions[0],
-    saleType: normalizeCustomerType(saleTypeOptions[0]),
+    saleType: normalizeCustomerType(defaultSaleType),
     gstin: "", siteAddress: "", dealerTier: "", paymentTerms: "",
     transportMode: "Own Vehicle", vehicleNo: "", ewayBillNo: "", notes: "",
   });
@@ -389,6 +397,13 @@ const CustomerBill = () => {
     const normalizedType = normalizeCustomerType(
       quotation?.customerType || quotation?.saleType || qCustomer?.customerType || qCustomer?.saleType
     );
+    if (!allowedCustomerTypes.has(normalizedType)) {
+      const msg = isBulkOrder
+        ? "This customer is Retail Customer. Add it in New Invoice."
+        : `This customer is ${normalizedType}. Add it in Bulk Order.`;
+      toast.error(msg);
+      return;
+    }
     setSelectedCustomer({
       name: qCustomer?.name || quotation.customerName || "",
       phone: qCustomer?.phone || quotation.customerPhone || "",
@@ -446,14 +461,14 @@ const CustomerBill = () => {
     setCustomerSearch(selectedCustomer?.name || "");
     setBillMeta((prev) => ({
       ...prev,
-      saleType: getCustomerSaleType(selectedCustomer),
+      saleType: selectedCustomer ? getCustomerSaleType(selectedCustomer) : defaultSaleType,
       siteAddress: selectedCustomer?(prev.siteAddress||selectedCustomer.address||""):"",
       gstin: selectedCustomer?(selectedCustomer.gstin||details.gstin||prev.gstin||""):"",
       dealerTier: selectedCustomer?(details.dealerTier||prev.dealerTier||""):"",
       paymentTerms: selectedCustomer?(details.paymentTerms||selectedCustomer.paymentTerms||prev.paymentTerms||""):"",
       notes: selectedCustomer?(details.notes||prev.notes||""):prev.notes,
     }));
-  }, [selectedCustomer]);
+  }, [selectedCustomer, defaultSaleType]);
 
   const isBusinessSale = billMeta.saleType !== "Retail Customer";
 
@@ -741,7 +756,7 @@ const CustomerBill = () => {
     setPartialAmount(""); setPayingAmountError("");
     setBillMeta({
       date:new Date().toISOString().slice(0,10), salesPerson:user?.name||salesPersonOptions[0],
-      saleType:normalizeCustomerType(saleTypeOptions[0]), gstin:"", siteAddress:"",
+      saleType:normalizeCustomerType(defaultSaleType), gstin:"", siteAddress:"",
       dealerTier:"", paymentTerms:"", transportMode:"Own Vehicle", vehicleNo:"", ewayBillNo:"", notes:"",
     });
   };
@@ -755,7 +770,6 @@ const CustomerBill = () => {
     ["Transport",`+Rs.${fmt(totals.transportAmount)}`],
     [`GST (${Number(extraGst)||0}%)`,`Rs.${fmt(totals.extraGstAmount)}`],
     ["Total",`Rs.${fmt(totals.finalAmount)}`,true],
-    ["Advance Received",`-Rs.${fmt(paymentSummary.paidAmount)}`],
     ["Balance Due",`Rs.${fmt(paymentSummary.dueAmount)}`,true,"danger"],
   ];
 
@@ -808,6 +822,23 @@ const CustomerBill = () => {
                 New Retail Sale Bill
               </Typography>
             <Box sx={{ display:"flex", alignItems:"center", gap:1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<HistoryIcon />}
+                onClick={() => navigate("/reports", { state: { report: historyReportKey } })}
+                sx={{
+                  borderRadius: 0,
+                  textTransform: "none",
+                  fontWeight: 700,
+                  height: 36,
+                  minHeight: 36,
+                  px: 1.3,
+                  fontSize: 12,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                History
+              </Button>
               <Autocomplete
                 freeSolo
                 options={customerOptions}
@@ -831,10 +862,17 @@ const CustomerBill = () => {
                   }
                 }}
                 onChange={(_, value) => {
-                  if (value) {
-                    setSelectedCustomer(value);
-                    setHeaderSearch(value.name || "");
+                  if (!value) return;
+                  const customerType = getCustomerSaleType(value);
+                  if (!allowedCustomerTypes.has(customerType)) {
+                    const msg = isBulkOrder
+                      ? "This customer is Retail Customer. Add it in New Invoice."
+                      : `This customer is ${customerType}. Add it in Bulk Order.`;
+                    toast.error(msg);
+                    return;
                   }
+                  setSelectedCustomer(value);
+                  setHeaderSearch(value.name || "");
                 }}
                 getOptionLabel={(option) => option?.name || ""}
                 filterOptions={(options, { inputValue }) => {
@@ -846,6 +884,16 @@ const CustomerBill = () => {
                     (o.alternateMobile || "").includes(q)
                   );
                 }}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} sx={{ display:"flex", flexDirection:"column", alignItems:"flex-start", py:1 }}>
+                    <Typography sx={{ fontSize:13, fontWeight:700, color:"#0f172a", lineHeight:1.2 }}>
+                      {option?.name || "-"}
+                    </Typography>
+                    <Typography sx={{ fontSize:11.5, color:"#64748b", lineHeight:1.3 }}>
+                      {[option?.phone, option?.alternateMobile].filter(Boolean).join(" / ") || "No phone"}
+                    </Typography>
+                  </Box>
+                )}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -921,7 +969,18 @@ const CustomerBill = () => {
                       value={selectedCustomer}
                       inputValue={customerSearch}
                       onInputChange={(_, value) => setCustomerSearch(value)}
-                      onChange={(_, value) => setSelectedCustomer(value || null)}
+                      onChange={(_, value) => {
+                        if (!value) { setSelectedCustomer(null); return; }
+                        const customerType = getCustomerSaleType(value);
+                        if (!allowedCustomerTypes.has(customerType)) {
+                          const msg = isBulkOrder
+                            ? "This customer is Retail Customer. Add it in New Invoice."
+                            : `This customer is ${customerType}. Add it in Bulk Order.`;
+                          toast.error(msg);
+                          return;
+                        }
+                        setSelectedCustomer(value);
+                      }}
                       getOptionLabel={(option) => option?.name || ""}
                       isOptionEqualToValue={(option, value) => String(option?._id || "") === String(value?._id || "")}
                       filterOptions={(options, { inputValue }) => {

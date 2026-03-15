@@ -2,6 +2,7 @@
   Box,
   Button,
   Card,
+  Autocomplete,
   Dialog,
   DialogContent,
   Divider,
@@ -27,6 +28,7 @@ import LockOpenIcon from "@mui/icons-material/LockOpen";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import PrintIcon from "@mui/icons-material/Print";
+import HistoryIcon from "@mui/icons-material/History";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -34,6 +36,7 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import API from "../services/api";
 import { getProducts } from "../services/productService";
+import { getCustomers } from "../services/customerService";
 import InvoicePrint from "../components/billing/InvoicePrint";
 
 /* ─── Constants ──────────────────────────────────────── */
@@ -202,6 +205,7 @@ const Invoice = ({ mode = "invoice" }) => {
   const isQuotation = mode === "quotation";
   const editInvoice = state?.editInvoice || null;
   const isEditMode = Boolean(editInvoice?._id);
+  const historyReportKey = isQuotation ? "quotation" : "sales";
 
   const inputSxEffective = isQuotation
     ? { ...inputSx, "& .MuiOutlinedInput-root": { ...inputSx["& .MuiOutlinedInput-root"], borderRadius: 0 } }
@@ -210,6 +214,7 @@ const Invoice = ({ mode = "invoice" }) => {
 
   /* ─── State ──────────────────────────────────────────── */
   const [products,          setProducts]          = useState([]);
+  const [customers,         setCustomers]         = useState([]);
   const [items,             setItems]             = useState([]);
   const [customer,          setCustomer]          = useState(emptyCustomer);
   const [saleType,          setSaleType]          = useState(CUSTOMER_TYPE_OPTIONS[0]);
@@ -232,6 +237,7 @@ const Invoice = ({ mode = "invoice" }) => {
   const [quotationLoading,  setQuotationLoading]  = useState(false);
   const [quotationApplied,  setQuotationApplied]  = useState(null);
   const [draftQuotationNo,  setDraftQuotationNo]  = useState("");
+  const [quotationLookup,   setQuotationLookup]   = useState("");
   const [shopSettings,      setShopSettings]      = useState(() => getSavedShopSettings());
 
   /* ── FIX: separate state for product search per row ── */
@@ -260,6 +266,16 @@ const Invoice = ({ mode = "invoice" }) => {
       } catch { toast.error("Failed to load products"); }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!isQuotation) return;
+    (async () => {
+      try {
+        const res = await getCustomers();
+        setCustomers(Array.isArray(res.data) ? res.data : []);
+      } catch { toast.error("Failed to load customers"); }
+    })();
+  }, [isQuotation]);
 
   useEffect(() => {
     setShopSettings(getSavedShopSettings());
@@ -371,6 +387,14 @@ const Invoice = ({ mode = "invoice" }) => {
       toast.success("Quotation loaded");
     } catch { toast.error("Failed to load quotation"); }
     finally { setQuotationLoading(false); }
+  };
+
+  const quotationCustomerLabel = (quotation) => {
+    const qCustomer = quotation?.customer || {};
+    return {
+      name: qCustomer.name || quotation?.customerName || "",
+      phone: qCustomer.phone || quotation?.customerPhone || "",
+    };
   };
 
   /* ─── Populate from navigation state ────────────────── */
@@ -618,6 +642,21 @@ const Invoice = ({ mode = "invoice" }) => {
 
   /* ─── Customer ───────────────────────────────────────── */
   const handleCustomerChange = (e) => setCustomer((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const clearCustomerSelection = () => {
+    setCustomer(emptyCustomer);
+    setSaleType(CUSTOMER_TYPE_OPTIONS[0]);
+  };
+  const handleCustomerSelect = (value) => {
+    if (!value) { clearCustomerSelection(); return; }
+    setCustomer({
+      ...emptyCustomer,
+      _id: value._id,
+      name: value.name || "",
+      phone: value.phone || "",
+      address: value.address || "",
+    });
+    setSaleType(normalizeCustomerType(value.customerType || value.saleType));
+  };
   const canConfirmCustomer = customer.name.trim() && customer.phone.trim() && customer.address.trim();
   const handleConfirmCustomer = () => {
     if (!canConfirmCustomer) { toast.error("Fill customer name, phone number, and address before confirming"); return; }
@@ -811,7 +850,6 @@ const Invoice = ({ mode = "invoice" }) => {
         ["Transport",        `Rs.${fmt(transportAmount)}`],
         [`GST (${Number(tax) || 0}%)`, `Rs.${fmt(taxAmount)}`],
         ["Total",            `Rs.${fmt(finalAmount)}`],
-        ["Advance Received", `Rs.${fmt(advanceReceived)}`],
         ["Pending Amount",   `Rs.${fmt(pendingAmount)}`],
       ];
 
@@ -1408,9 +1446,94 @@ const Invoice = ({ mode = "invoice" }) => {
               <Typography sx={panelTitleSx}>Customer Details</Typography>
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 {isQuotation && (
-                  <Box sx={{ fontSize: 11, fontWeight: 700, color: primary, background: "#e7efff", px: 1.1, py: 0.4, borderRadius: 0, border: "1px solid #c7d9ff" }}>
-                    Quotation No: {quotationNumberPreview}
-                  </Box>
+                  <>
+                    <Button
+                      variant="outlined"
+                      startIcon={<HistoryIcon />}
+                      onClick={() => navigate("/reports", { state: { report: historyReportKey } })}
+                      sx={{
+                        borderRadius: 0,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        height: 36,
+                        minHeight: 36,
+                        px: 1.3,
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      History
+                    </Button>
+                    <Autocomplete
+                      freeSolo
+                      options={quotationList}
+                      value={null}
+                      inputValue={quotationLookup}
+                      onInputChange={(_, value, reason) => {
+                        setQuotationLookup(value);
+                        if (reason === "input") {
+                          const q = String(value || "").trim().toUpperCase();
+                          if (q.startsWith("QTN")) {
+                            const cached = quotationList.find((x) => String(x?.invoiceNo || "").toUpperCase() === q);
+                            if (cached) applyQuotation(cached);
+                          }
+                        }
+                      }}
+                      onOpen={() => { if (!quotationList.length) fetchQuotations(); }}
+                      onChange={(_, value) => {
+                        if (value) {
+                          applyQuotation(value);
+                          setQuotationLookup(String(value.invoiceNo || ""));
+                        }
+                      }}
+                      getOptionLabel={(option) => option?.invoiceNo || ""}
+                      filterOptions={(options, { inputValue }) => {
+                        const q = String(inputValue || "").toLowerCase().trim();
+                        if (!q) return options;
+                        return options.filter((o) => {
+                          const no = String(o?.invoiceNo || "").toLowerCase();
+                          const c = quotationCustomerLabel(o);
+                          return no.includes(q) ||
+                            (c.name || "").toLowerCase().includes(q) ||
+                            (c.phone || "").includes(q);
+                        });
+                      }}
+                      renderOption={(props, option) => {
+                        const c = quotationCustomerLabel(option);
+                        return (
+                          <Box component="li" {...props} sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", py: 1 }}>
+                            <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                              {option?.invoiceNo || "-"}
+                            </Typography>
+                            <Typography sx={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.3 }}>
+                              {[c.name, c.phone].filter(Boolean).join(" • ") || "No customer info"}
+                            </Typography>
+                          </Box>
+                        );
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="Search quotation / name / phone"
+                          sx={{ ...inputSxEffective, minWidth: 240 }}
+                          onBlur={(e) => {
+                            const q = String(e.target.value || "").trim();
+                            if (q) lookupQuotation(q);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              const q = String(e.currentTarget.value || "").trim();
+                              if (q) lookupQuotation(q);
+                            }
+                          }}
+                        />
+                      )}
+                    />
+                    <Box sx={{ fontSize: 11, fontWeight: 700, color: primary, background: "#e7efff", px: 1.1, py: 0.4, borderRadius: 0, border: "1px solid #c7d9ff" }}>
+                      Quotation No: {quotationNumberPreview}
+                    </Box>
+                  </>
                 )}
                 {isQuotation && customerLocked && (
                   <Button size="small" variant="outlined" startIcon={<EditIcon />} onClick={() => setCustomerLocked(false)}>Edit</Button>
@@ -1421,7 +1544,57 @@ const Invoice = ({ mode = "invoice" }) => {
               <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: isQuotation ? "repeat(5, 1fr)" : "repeat(6, 1fr)" }, gap: 1.5, alignItems: "end" }}>
                 <Box>
                   <Typography sx={fieldLabelSx}>Customer Name</Typography>
-                  <TextField size="small" name="name" fullWidth value={customer.name} onChange={handleCustomerChange} disabled={isQuotation && customerLocked} sx={inputSxEffective} />
+                  {isQuotation ? (
+                    <Autocomplete
+                      freeSolo
+                      fullWidth
+                      options={customers}
+                      value={customers.find((c) => String(c?._id || "") === String(customer?._id || "")) || null}
+                      inputValue={customer.name}
+                      onInputChange={(_, value, reason) => {
+                        if (reason === "input") {
+                          setCustomer((prev) => ({ ...prev, name: value, _id: undefined }));
+                        }
+                        if (reason === "clear") {
+                          clearCustomerSelection();
+                        }
+                      }}
+                      onChange={(_, value) => handleCustomerSelect(value)}
+                      getOptionLabel={(option) => option?.name || ""}
+                      isOptionEqualToValue={(option, value) => String(option?._id || "") === String(value?._id || "")}
+                      filterOptions={(options, { inputValue }) => {
+                        const q = inputValue.toLowerCase().trim();
+                        if (!q) return options;
+                        return options.filter((o) =>
+                          (o.name || "").toLowerCase().includes(q) ||
+                          (o.phone || "").includes(q) ||
+                          (o.alternateMobile || "").includes(q)
+                        );
+                      }}
+                      renderOption={(props, option) => (
+                        <Box component="li" {...props} sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", py: 1 }}>
+                          <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
+                            {option?.name || "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.3 }}>
+                            {[option?.phone, option?.alternateMobile].filter(Boolean).join(" / ") || "No phone"}
+                          </Typography>
+                        </Box>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          size="small"
+                          placeholder="Search by customer name or phone"
+                          disabled={customerLocked}
+                          sx={inputSxEffective}
+                        />
+                      )}
+                      disabled={customerLocked}
+                    />
+                  ) : (
+                    <TextField size="small" name="name" fullWidth value={customer.name} onChange={handleCustomerChange} disabled={customerLocked} sx={inputSxEffective} />
+                  )}
                 </Box>
                 <Box>
                   <Typography sx={fieldLabelSx}>Customer Type</Typography>

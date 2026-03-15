@@ -196,13 +196,14 @@ const Sidebar = ({ open = true, onToggle }) => {
   const isPurchaseActive = location.pathname.startsWith("/suppliers/products") || location.pathname.startsWith("/purchase/details");
   const isSupplierActive = location.pathname.startsWith("/suppliers") && !isPurchaseActive;
   const isCustomerActive = location.pathname.startsWith("/customers");
-  const isSalesActive    = location.pathname === "/quotation" || location.pathname === "/customers/bill";
+  const isSalesActive    = location.pathname === "/quotation" || location.pathname === "/customers/bill" || location.pathname === "/customers/bulk-order";
   const isSettingsActive = ["/company-profile", "/invoice-settings", "/product-defaults", "/user-management", "/backup-data"].includes(location.pathname);
 
   /* ── Sub-item configs ── */
   const salesSubItems = [
     { label: "Quotes",      icon: <ReceiptIcon      sx={{ fontSize: 16 }} />, path: "/quotation" },
     { label: "New Invoice", icon: <ReceiptLongIcon  sx={{ fontSize: 16 }} />, path: "/customers/bill" },
+    { label: "Bulk Order",  icon: <ReceiptLongIcon  sx={{ fontSize: 16 }} />, path: "/customers/bulk-order" },
   ];
   const productSubItems = [
     { label: "Add Inventory",   icon: <AddBoxIcon   sx={{ fontSize: 16 }} />, path: "/products/add" },

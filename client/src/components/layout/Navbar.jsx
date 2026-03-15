@@ -13,6 +13,7 @@ const routeMeta = [
   { match: (p) => p === "/", title: "Dashboard", subtitle: "Welcome to your workspace", tabIcon: "📊" },
   { match: (p) => p === "/quotation", title: "Quotation", subtitle: "Create & manage quotations", tabIcon: "🧾" },
   { match: (p) => p === "/customers/bill", title: "Create Bill", subtitle: "New sales invoice", tabIcon: "🧾" },
+  { match: (p) => p === "/customers/bulk-order", title: "Bulk Order", subtitle: "Bulk sales order", tabIcon: "🧾" },
   { match: (p) => p.startsWith("/customers/payments"), title: "Receive Payment", subtitle: "Record customer payments", tabIcon: "💳" },
   { match: (p) => p.startsWith("/customers/details"), title: "Customer Details", subtitle: "View & manage customers", tabIcon: "👥" },
   { match: (p) => p.startsWith("/customers/create"), title: "Create Customer", subtitle: "Add a new customer", tabIcon: "👤" },

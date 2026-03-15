@@ -589,6 +589,7 @@ const Customers = () => {
     if (active === "overview")  return renderOverview();
     if (active === "create")    return <CustomerCreate />;
     if (active === "bill")      return <CustomerBill />;
+    if (active === "bulk-order") return <CustomerBill />;
     if (active === "details")   return <CustomerDetails />;
     if (active === "payments")  return <CustomerPayments />;
     return null;

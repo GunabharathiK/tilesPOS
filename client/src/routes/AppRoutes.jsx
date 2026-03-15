@@ -56,6 +56,7 @@ const AppRoutes = () => {
           <Route path="customers"          element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/create"   element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/bill"     element={<AdminRoute><Customers /></AdminRoute>} />
+          <Route path="customers/bulk-order" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/details" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/payments" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="reports"            element={<AdminRoute><Reports /></AdminRoute>} />

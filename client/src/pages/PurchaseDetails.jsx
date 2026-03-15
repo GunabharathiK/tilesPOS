@@ -184,7 +184,7 @@ const DetailRow = ({ label, value }) => (
 );
 
 /* ─── View Dialog ────────────────────────────────────────────── */
-const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase }) => {
+const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase, selectedPurchase }) => {
   if (!supplier) return null;
 
   const statusBadge =
@@ -194,10 +194,12 @@ const ViewDialog = ({ supplier, purchases, open, onClose, onEdit, onEditPurchase
         ? { bg: T.warningLight, color: T.warning }
         : { bg: T.dangerLight, color: T.danger };
 
-  const supplierPurchases = purchases.filter((purchase) => {
-    const pid = purchase.supplierId?._id || purchase.supplierId;
-    return pid === supplier._id;
-  });
+  const supplierPurchases = selectedPurchase
+    ? [selectedPurchase]
+    : purchases.filter((purchase) => {
+        const pid = purchase.supplierId?._id || purchase.supplierId;
+        return pid === supplier._id;
+      });
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
@@ -365,6 +367,7 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
   const [productFilter, setProductFilter] = useState("All Categories");
   const [paymentTab,    setPaymentTab]    = useState("All");
   const [viewSupplier,  setViewSupplier]  = useState(null);
+  const [viewPurchase,  setViewPurchase]  = useState(null);
   const [importing,     setImporting]     = useState(false);
   const [expandedRows,  setExpandedRows]  = useState({});
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
@@ -538,6 +541,7 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
 
   const handleEditPurchase = (purchase) => {
     setViewSupplier(null);
+    setViewPurchase(null);
     const purchaseSupplier = suppliers.find((s) => s._id === (purchase.supplierId?._id || purchase.supplierId));
     navigate("/suppliers/products", {
       state: { supplierId: purchase.supplierId?._id || purchase.supplierId, supplier: purchaseSupplier || purchase.supplierId || null, editPurchase: purchase },
@@ -851,7 +855,7 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
                                           {statusLabel}
                                         </Box>
                                         <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
-                                          <Typography onClick={() => setViewSupplier(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: T.primary, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>View</Typography>
+                                          <Typography onClick={() => { setViewPurchase(p); setViewSupplier(supplier); }} sx={{ fontSize: 12, fontWeight: 700, color: T.primary, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>View</Typography>
                                           <Typography onClick={() => handleEditPurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Edit</Typography>
                                           <Typography onClick={() => handlePay(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: "#0284c7", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Pay</Typography>
                                           <Typography onClick={() => handleDeletePurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: T.danger, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Delete</Typography>
@@ -896,9 +900,10 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
         supplier={viewSupplier}
         purchases={purchases}
         open={Boolean(viewSupplier)}
-        onClose={() => setViewSupplier(null)}
+        onClose={() => { setViewSupplier(null); setViewPurchase(null); }}
         onEdit={handleEdit}
         onEditPurchase={handleEditPurchase}
+        selectedPurchase={viewPurchase}
       />
 
       <ConfirmDialog
