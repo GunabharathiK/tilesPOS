@@ -241,6 +241,7 @@ const CustomerPayments = () => {
   const [searchQuery,    setSearchQuery]    = useState("");
   const [currentPage,    setCurrentPage]    = useState(1);
   const [expandedRowKey, setExpandedRowKey] = useState(null);
+  const [showPendingCollections, setShowPendingCollections] = useState(() => !hasPrefill);
 
   const previewRef  = useRef(null);
   const formTopRef  = useRef(null);
@@ -612,12 +613,14 @@ const CustomerPayments = () => {
     setSelectedKey(""); setSelectedInvoiceIds([]); setAmountReceived("");
     setPaymentMode("Cash"); setTransactionRef(""); setRemarks("");
     setReceiptDate(new Date().toISOString().slice(0, 10));
+    setShowPendingCollections(true);
   };
 
   const resetPaymentFields = () => {
     setSelectedKey(""); setSelectedInvoiceIds([]); setAmountReceived("");
     setPaymentMode("Cash"); setTransactionRef(""); setRemarks("");
     setReceiptDate(new Date().toISOString().slice(0, 10));
+    setShowPendingCollections(true);
   };
 
   /* ─────────────────────────────────────────────────────
@@ -929,12 +932,23 @@ const CustomerPayments = () => {
               <Btn onClick={handleGenerateInvoice} disabled={loading || allSelectedArePaid}>
                 {loading ? "Processing..." : "Generate Invoice"}
               </Btn>
+              {hasPrefill && (
+                <Btn
+                  onClick={() => setShowPendingCollections((prev) => !prev)}
+                  disabled={loading}
+                  outlined
+                  color={T.primary}
+                >
+                  {showPendingCollections ? "Hide Pending List" : "Show Pending List"}
+                </Btn>
+              )}
               <Btn onClick={resetPaymentFields} disabled={loading} bg={T.muted}>Cancel</Btn>
             </Box>
           </Box>
         </Box>
 
         {/* ── Pending Collections ── */}
+        {showPendingCollections && (
         <Box sx={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 1px 3px rgba(15,23,42,.06)", overflow: "hidden", mb: 2.5 }}>
 
           {/* Panel header */}
@@ -1075,6 +1089,7 @@ const CustomerPayments = () => {
             </Box>
           )}
         </Box>
+        )}
       </Box>
 
       {/* Preview Dialog */}

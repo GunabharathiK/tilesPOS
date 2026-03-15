@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Card,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Typography,
   TextField,
   Button,
@@ -303,9 +307,24 @@ const CustomerCreate = () => {
   const [loading,           setLoading]           = useState(false);
   const [editingCustomerId, setEditingCustomerId] = useState("");
   const [activeType,        setActiveType]        = useState("Retail Customer");
+  const [customers,         setCustomers]         = useState([]);
+  const [duplicateDialog,   setDuplicateDialog]   = useState({ open: false, phone: "", customer: null });
   const formTopRef = useRef(null);
 
   const isBusinessType = activeType !== "Retail Customer";
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await getCustomers();
+      setCustomers(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      toast.error("Failed to load customers");
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const handleChange = (field, value) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -342,6 +361,19 @@ const CustomerCreate = () => {
         }
       : form;
 
+    const normalizedPhone = String(payload.phone || "").replace(/\D/g, "");
+    const duplicateCustomer = customers.find((customer) => {
+      const customerPhone = String(customer?.phone || "").replace(/\D/g, "");
+      if (!customerPhone || customerPhone !== normalizedPhone) return false;
+      if (!editingCustomerId) return true;
+      return String(customer?._id || "") !== String(editingCustomerId);
+    });
+
+    if (normalizedPhone && duplicateCustomer) {
+      setDuplicateDialog({ open: true, phone: normalizedPhone, customer: duplicateCustomer });
+      return;
+    }
+
     setLoading(true);
     try {
       const request = { ...payload, customerType: activeType, amount: 0, status: "Pending", method: "" };
@@ -354,6 +386,7 @@ const CustomerCreate = () => {
       }
       setEditingCustomerId("");
       setForm({ ...initialForm, customerType: activeType });
+      fetchCustomers();
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to save customer");
     } finally {
@@ -723,10 +756,53 @@ const CustomerCreate = () => {
           </Box>
         </Box>
 
-        {/* ── Customer list below ── */}
-        <Box>
-          <CustomerDetailsList onEditCustomer={handleEditCustomer} />
-        </Box>
+      {/* ── Customer list below ── */}
+      <Box>
+        <CustomerDetailsList onEditCustomer={handleEditCustomer} />
+      </Box>
+
+      <Dialog
+        open={duplicateDialog.open}
+        onClose={() => setDuplicateDialog({ open: false, phone: "", customer: null })}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 0 } }}
+      >
+        <DialogTitle sx={{ fontSize: 16, fontWeight: 800, color: T.dark }}>
+          Mobile Number Already Exists
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography sx={{ fontSize: 13, color: T.text, lineHeight: 1.6 }}>
+            This phone number already exists for
+            {" "}
+            <Box component="span" sx={{ fontWeight: 700, color: T.primary }}>
+              {duplicateDialog.customer?.name || duplicateDialog.customer?.companyName || "an existing customer"}
+            </Box>
+            .
+            {" "}
+            Do you want to go to the previous customer details page or stay here and create a new one?
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.2, gap: 1 }}>
+          <Button
+            onClick={() => {
+              setDuplicateDialog({ open: false, phone: "", customer: null });
+              navigate("/customers/details");
+            }}
+            variant="outlined"
+            sx={{ borderRadius: 0, textTransform: "none", fontWeight: 700 }}
+          >
+            Previous
+          </Button>
+          <Button
+            onClick={() => setDuplicateDialog({ open: false, phone: "", customer: null })}
+            variant="contained"
+            sx={{ borderRadius: 0, textTransform: "none", fontWeight: 700, background: T.primary, "&:hover": { background: T.primaryDark } }}
+          >
+            Create New
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       </Box>
     </Box>

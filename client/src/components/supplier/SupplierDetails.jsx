@@ -3,13 +3,11 @@ import {
   Box,
   Dialog,
   DialogContent,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
@@ -38,28 +36,16 @@ const T = {
   surfaceAlt:   "#f8fafc",
 };
 
-/* ── Input style — zero radius ── */
-const inputSx = {
-  "& .MuiOutlinedInput-root": {
-    borderRadius: 0,
-    background: T.surface,
-    fontSize: 13,
-    "& fieldset": { borderColor: T.border },
-    "&:hover fieldset": { borderColor: T.primary },
-    "&.Mui-focused fieldset": { borderColor: T.primary, borderWidth: 1.5 },
-    "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(26,86,160,.08)" },
-  },
-  "& .MuiInputLabel-root":             { fontSize: 13, color: T.muted },
-  "& .MuiInputLabel-root.Mui-focused": { color: T.primary },
-};
-
 /* ── Table header cell ── */
 const TH = ({ children, align = "left" }) => (
   <TableCell align={align} sx={{
-    py: 1.2, px: 2, fontSize: 10.5, fontWeight: 700, color: T.muted,
+    py: 1.2, px: 2, fontSize: 10.5, fontWeight: 700, color: "#fff",
     textTransform: "uppercase", letterSpacing: ".07em",
-    background: T.surfaceAlt, borderBottom: `1px solid ${T.border}`,
+    background: T.primary,
+    borderRight: "1px solid rgba(255,255,255,.15)",
+    "&:last-child": { borderRight: "none" },
     whiteSpace: "nowrap",
+    position: "sticky", top: 0, zIndex: 2,
   }}>
     {children}
   </TableCell>
@@ -139,8 +125,6 @@ const SupplierDetails = () => {
   const [search,       setSearch]       = useState("");
   const [sortBy,       setSortBy]       = useState("name");
   const [sortDir,      setSortDir]      = useState("asc");
-  const [pageSize,     setPageSize]     = useState(10);
-  const [page,         setPage]         = useState(1);
   const [viewSupplier, setViewSupplier] = useState(null);
 
   const cols = [
@@ -191,10 +175,6 @@ const SupplierDetails = () => {
     });
   }, [suppliers, search, sortBy, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage   = Math.min(page, totalPages);
-  const paged      = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
-
   const toggleSort = col => {
     if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortBy(col); setSortDir("asc"); }
@@ -203,7 +183,7 @@ const SupplierDetails = () => {
   const SortArrow = ({ col }) =>
     sortBy !== col
       ? <Box component="span" sx={{ opacity: 0.3, ml: 0.4, fontSize: 11 }}>↕</Box>
-      : <Box component="span" sx={{ ml: 0.4, fontSize: 11, color: T.primary }}>{sortDir === "asc" ? "↑" : "↓"}</Box>;
+      : <Box component="span" sx={{ ml: 0.4, fontSize: 11, color: "#fff" }}>{sortDir === "asc" ? "↑" : "↓"}</Box>;
 
   const handleDelete = async supplier => {
     if (!supplier?._id) return;
@@ -217,22 +197,6 @@ const SupplierDetails = () => {
 
   const handleEdit = supplier => {
     if (supplier) navigate("/suppliers/create", { state: { editSupplier: supplier } });
-  };
-
-  /* ── Pagination pages ── */
-  const renderPageBtns = () => {
-    const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
-      .filter(p => p === 1 || p === totalPages || (p >= safePage - 1 && p <= safePage + 1))
-      .reduce((acc, p, i, arr) => { if (i > 0 && p - arr[i - 1] > 1) acc.push("…"); acc.push(p); return acc; }, []);
-
-    return pages.map((p, i) =>
-      p === "…"
-        ? <Box key={`e${i}`} sx={{ px: 0.8, fontSize: 12, color: T.faint, display: "inline-flex", alignItems: "center" }}>…</Box>
-        : <Box key={p} onClick={() => setPage(p)}
-            sx={{ minWidth: 30, height: 28, px: 0.8, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: p === safePage ? 700 : 500, cursor: "pointer", border: `1px solid ${p === safePage ? T.primary : T.border}`, background: p === safePage ? T.primary : T.surface, color: p === safePage ? "#fff" : T.muted, "&:hover": p !== safePage ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .1s" }}>
-            {p}
-          </Box>
-    );
   };
 
   /* ══════════════════════════════════════ RENDER ══════ */
@@ -263,7 +227,6 @@ const SupplierDetails = () => {
 
           {/* ── Toolbar ── */}
           <Box sx={{ px: 2, py: 1.3, display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", borderBottom: `1px solid ${T.border}`, background: T.surfaceAlt }}>
-            {/* Count badge */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Typography sx={{ fontSize: 13, fontWeight: 800, color: T.dark }}>All Suppliers</Typography>
               <Box sx={{ px: 1.2, py: "2px", background: T.primaryLight, border: `1px solid #c3d9f5`, fontSize: 11, fontWeight: 700, color: T.primary }}>
@@ -272,34 +235,34 @@ const SupplierDetails = () => {
             </Box>
 
             <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}>
-              {/* Rows per page */}
-              <TextField select size="small" value={pageSize}
-                onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-                sx={{ minWidth: 100, ...inputSx }}
-              >
-                {[10, 25, 50, 100].map(n => <MenuItem key={n} value={n}>{n} / page</MenuItem>)}
-              </TextField>
-
               {/* Search */}
-              <TextField size="small" value={search}
-                onChange={e => { setSearch(e.target.value); setPage(1); }}
-                placeholder="Search by name, phone, city…"
-                sx={{ minWidth: 240, ...inputSx }}
-                InputProps={{
-                  startAdornment: (
-                    <Box component="span" sx={{ mr: 0.8, color: T.faint, display: "flex", alignItems: "center" }}>
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
-                      </svg>
-                    </Box>
-                  ),
-                }}
-              />
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, background: T.surface, border: `1px solid ${T.border}`, px: 1.2, py: 0.5, "&:focus-within": { borderColor: T.primary, boxShadow: "0 0 0 2px rgba(26,86,160,.08)" }, transition: "all .12s", minWidth: 260 }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={T.faint} strokeWidth="1.5" style={{ flexShrink: 0 }}>
+                  <circle cx="6.5" cy="6.5" r="4.5"/><path d="M10.5 10.5L14 14" strokeLinecap="round"/>
+                </svg>
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search by name, phone, city…"
+                  style={{ border: "none", outline: "none", fontSize: 13, color: T.text, background: "transparent", width: "100%", fontFamily: "inherit" }}
+                />
+              </Box>
             </Box>
           </Box>
 
-          {/* ── Table ── */}
-          <Box sx={{ overflowX: "auto" }}>
+          {/* ── Scrollable Table — shows ~10 rows, then scrolls ── */}
+          <Box
+            sx={{
+              overflowX: "auto",
+              overflowY: "auto",
+              maxHeight: "430px", /* ~10 rows × 43px each */
+              "& thead tr th": { position: "sticky", top: 0, zIndex: 2 },
+              "&::-webkit-scrollbar": { width: 6, height: 6 },
+              "&::-webkit-scrollbar-track": { background: T.surfaceAlt },
+              "&::-webkit-scrollbar-thumb": { background: T.border, borderRadius: 3 },
+              "&::-webkit-scrollbar-thumb:hover": { background: T.faint },
+            }}
+          >
             <Table size="small" sx={{ minWidth: 760 }}>
               <TableHead>
                 <TableRow>
@@ -307,7 +270,7 @@ const SupplierDetails = () => {
                     <TH key={col.key}>
                       <Box
                         onClick={() => !col.noSort && toggleSort(col.key)}
-                        sx={{ display: "inline-flex", alignItems: "center", cursor: col.noSort ? "default" : "pointer", userSelect: "none", "&:hover": !col.noSort ? { color: T.primary } : {} }}
+                        sx={{ display: "inline-flex", alignItems: "center", cursor: col.noSort ? "default" : "pointer", userSelect: "none", "&:hover": !col.noSort ? { opacity: 0.85 } : {} }}
                       >
                         {col.label}
                         {!col.noSort && <SortArrow col={col.key} />}
@@ -320,12 +283,18 @@ const SupplierDetails = () => {
               <TableBody>
                 {loading ? (
                   <TableRow><TableCell colSpan={7} align="center" sx={{ py: 6, color: T.faint, fontSize: 13, border: "none" }}>Loading suppliers…</TableCell></TableRow>
-                ) : paged.length === 0 ? (
+                ) : rows.length === 0 ? (
                   <TableRow><TableCell colSpan={7} align="center" sx={{ py: 6, color: T.faint, fontSize: 13, border: "none" }}>No suppliers found.</TableCell></TableRow>
-                ) : paged.map((r, idx) => (
+                ) : rows.map((r, idx) => (
                   <TableRow
                     key={r.raw?._id}
-                    sx={{ background: idx % 2 === 0 ? T.surface : T.surfaceAlt, "&:hover": { background: T.primaryLight }, transition: "background .1s", cursor: "default" }}
+                    onClick={() => setViewSupplier(r.raw)}
+                    sx={{
+                      background: idx % 2 === 0 ? T.surface : T.surfaceAlt,
+                      "&:hover": { background: T.primaryLight },
+                      transition: "background .1s",
+                      cursor: "pointer",
+                    }}
                   >
                     <TD sx={{ fontWeight: 700, color: T.primary }}>{r.name}</TD>
                     <TD sx={{ fontFamily: "'DM Mono', monospace", fontSize: 12 }}>{r.phone}</TD>
@@ -334,7 +303,7 @@ const SupplierDetails = () => {
                     <TD>{r.terms}</TD>
                     <TD><StatusBadge status={r.status} /></TD>
                     <TD>
-                      <Box sx={{ display: "flex", gap: 0.6 }}>
+                      <Box sx={{ display: "flex", gap: 0.6 }} onClick={e => e.stopPropagation()}>
                         <ActionBtn onClick={() => setViewSupplier(r.raw)}>View</ActionBtn>
                         <ActionBtn onClick={() => handleEdit(r.raw)}>Edit</ActionBtn>
                         <ActionBtn danger onClick={() => handleDelete(r.raw)}>Delete</ActionBtn>
@@ -346,22 +315,13 @@ const SupplierDetails = () => {
             </Table>
           </Box>
 
-          {/* ── Pagination ── */}
-          <Box sx={{ px: 2, py: 1.2, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, borderTop: `1px solid ${T.border}`, background: T.surfaceAlt }}>
+          {/* ── Footer: entry count ── */}
+          <Box sx={{ px: 2, py: 1.2, borderTop: `1px solid ${T.border}`, background: T.surfaceAlt }}>
             <Typography sx={{ fontSize: 12, color: T.muted }}>
-              Showing {rows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, rows.length)} of {rows.length}
+              {rows.length === 0
+                ? "No entries"
+                : `Showing all ${rows.length} ${rows.length === 1 ? "entry" : "entries"}`}
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              {/* Prev */}
-              <Box onClick={() => safePage > 1 && setPage(safePage - 1)}
-                sx={{ minWidth: 30, height: 28, px: 0.8, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, cursor: safePage <= 1 ? "default" : "pointer", border: `1px solid ${T.border}`, background: T.surface, color: safePage <= 1 ? T.faint : T.muted, opacity: safePage <= 1 ? 0.45 : 1, "&:hover": safePage > 1 ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .1s" }}>‹</Box>
-
-              {renderPageBtns()}
-
-              {/* Next */}
-              <Box onClick={() => safePage < totalPages && setPage(safePage + 1)}
-                sx={{ minWidth: 30, height: 28, px: 0.8, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, cursor: safePage >= totalPages ? "default" : "pointer", border: `1px solid ${T.border}`, background: T.surface, color: safePage >= totalPages ? T.faint : T.muted, opacity: safePage >= totalPages ? 0.45 : 1, "&:hover": safePage < totalPages ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .1s" }}>›</Box>
-            </Box>
           </Box>
         </Box>
       </Box>
@@ -373,7 +333,6 @@ const SupplierDetails = () => {
         maxWidth="md" fullWidth
         PaperProps={{ sx: { borderRadius: 0, boxShadow: "0 24px 64px rgba(0,0,0,.16)" } }}
       >
-        {/* Dialog header */}
         <Box sx={{ px: 3, py: 1.8, borderBottom: `2px solid ${T.primary}`, background: T.primaryLight, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <Box>
             <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.dark }}>
@@ -416,10 +375,10 @@ const SupplierDetails = () => {
 
                 <Box sx={{ mt: 2 }}>
                   <DialogSection>Tax</DialogSection>
-                  <DetailRow label="GSTIN"             value={viewSupplier.gstin} />
-                  <DetailRow label="PAN Number"        value={viewSupplier.panNumber} />
-                  <DetailRow label="State Code"        value={viewSupplier.stateCode} />
-                  <DetailRow label="Reg. Type"         value={viewSupplier.registrationType} />
+                  <DetailRow label="GSTIN"         value={viewSupplier.gstin} />
+                  <DetailRow label="PAN Number"    value={viewSupplier.panNumber} />
+                  <DetailRow label="State Code"    value={viewSupplier.stateCode} />
+                  <DetailRow label="Reg. Type"     value={viewSupplier.registrationType} />
                 </Box>
               </Box>
 
@@ -433,20 +392,20 @@ const SupplierDetails = () => {
 
                 <Box sx={{ mt: 2 }}>
                   <DialogSection>Bank Account</DialogSection>
-                  <DetailRow label="Bank Name"       value={viewSupplier.bankName} />
-                  <DetailRow label="Account No"      value={viewSupplier.accountNo} />
-                  <DetailRow label="IFSC Code"       value={viewSupplier.ifscCode} />
-                  <DetailRow label="Account Holder"  value={viewSupplier.accountHolder} />
-                  <DetailRow label="Branch"          value={viewSupplier.branch} />
-                  <DetailRow label="Account Type"    value={viewSupplier.accountType} />
-                  <DetailRow label="UPI ID"          value={viewSupplier.upiId} />
+                  <DetailRow label="Bank Name"      value={viewSupplier.bankName} />
+                  <DetailRow label="Account No"     value={viewSupplier.accountNo} />
+                  <DetailRow label="IFSC Code"      value={viewSupplier.ifscCode} />
+                  <DetailRow label="Account Holder" value={viewSupplier.accountHolder} />
+                  <DetailRow label="Branch"         value={viewSupplier.branch} />
+                  <DetailRow label="Account Type"   value={viewSupplier.accountType} />
+                  <DetailRow label="UPI ID"         value={viewSupplier.upiId} />
                 </Box>
 
                 <Box sx={{ mt: 2 }}>
                   <DialogSection>Rating & Notes</DialogSection>
-                  <DetailRow label="Rating"    value={viewSupplier.rating} />
-                  <DetailRow label="Priority"  value={viewSupplier.priority} />
-                  <DetailRow label="Notes"     value={viewSupplier.internalNotes} />
+                  <DetailRow label="Rating"   value={viewSupplier.rating} />
+                  <DetailRow label="Priority" value={viewSupplier.priority} />
+                  <DetailRow label="Notes"    value={viewSupplier.internalNotes} />
                 </Box>
               </Box>
             </Box>

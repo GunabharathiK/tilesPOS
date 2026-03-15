@@ -748,17 +748,6 @@ const Settings = ({ section = "all" }) => {
   /* ─── Render ─────────────────────────────────────────────────── */
   return (
     <div style={{ fontFamily: "'Noto Sans', sans-serif", padding: 0, background: T.bg, minHeight: "100%" }}>
-      {/* Page header */}
-      <div style={{ padding: "14px 24px", background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: T.dark, lineHeight: 1.2, letterSpacing: "-.01em" }}>Settings</div>
-          <div style={{ fontSize: 12, color: T.muted, marginTop: 1 }}>Manage shop profile, invoice, products and system preferences</div>
-        </div>
-        <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 700, color: T.muted, background: T.surfaceAlt, border: `1px solid ${T.border}`, padding: "5px 10px" }}>
-          {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-        </div>
-      </div>
-
       <div style={{ padding: "0 20px 20px" }}>
         <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 16, alignItems: "start" }}>
 

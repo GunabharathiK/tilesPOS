@@ -277,33 +277,6 @@ const Customers = () => {
     return (
       <Box>
 
-        {/* ── Page header ── */}
-        <Box sx={{ px: 3, py: 1.8, background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2.5 }}>
-          <Box>
-            <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.dark, lineHeight: 1.2, letterSpacing: "-.01em" }}>
-              Customer Dashboard
-            </Typography>
-            <Typography sx={{ fontSize: 12, color: T.muted, mt: 0.3 }}>
-              Billing history, collection status and payment analytics
-            </Typography>
-          </Box>
-          {/* Summary strip */}
-          <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-            <Box sx={{ textAlign: "right", pr: 1.5, borderRight: `1px solid ${T.border}` }}>
-              <Typography sx={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em" }}>Collection Rate</Typography>
-              <Typography sx={{ fontSize: 20, fontWeight: 800, color: collectionRate >= 80 ? T.success : collectionRate >= 50 ? T.warning : T.danger, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>
-                {collectionRate}%
-              </Typography>
-            </Box>
-            <Box sx={{ textAlign: "right" }}>
-              <Typography sx={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em" }}>Pending Accounts</Typography>
-              <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.danger, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>
-                {totals.pendingCount + totals.partialCount}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-
         <Box sx={{ px: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
 
           {/* ── Stat cards ── */}
@@ -331,10 +304,10 @@ const Customers = () => {
             />
             <StatCard
               icon={<ReceiptLongIcon sx={{ fontSize: 20 }} />}
-              label="Active Bills"
-              value={invoices.length}
+              label="Pending Accounts"
+              value={totals.pendingCount + totals.partialCount}
               accent={T.violet}
-              sub={`across ${overviewRows.length} customers`}
+              sub={`${collectionRate}% collection rate`}
             />
           </Box>
 

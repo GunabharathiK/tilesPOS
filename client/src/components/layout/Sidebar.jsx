@@ -16,12 +16,12 @@ import AddBoxIcon        from "@mui/icons-material/AddBox";
 import PersonAddIcon     from "@mui/icons-material/PersonAdd";
 import ReceiptLongIcon   from "@mui/icons-material/ReceiptLong";
 import AssessmentIcon    from "@mui/icons-material/Assessment";
-import ChevronLeftIcon   from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon  from "@mui/icons-material/ChevronRight";
 import LogoutIcon        from "@mui/icons-material/Logout";
 import PointOfSaleIcon   from "@mui/icons-material/PointOfSale";
 import BackupIcon        from "@mui/icons-material/Backup";
 import ExpandMoreIcon    from "@mui/icons-material/ExpandMore";
+import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -59,6 +59,34 @@ const NavSection = ({ label }) => (
       {label}
     </Typography>
   </Box>
+);
+
+const SideToggleBtn = ({ collapsed, onClick }) => (
+  <Tooltip title={collapsed ? "Open sidebar" : "Close sidebar"} placement="right" arrow>
+    <Box
+      onClick={onClick}
+      sx={{
+        width: 28,
+        height: 28,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        color: collapsed ? S.accentText : S.textSub,
+        background: collapsed ? S.accentDim : "transparent",
+        border: `1px solid ${collapsed ? "rgba(245,158,11,.22)" : S.border}`,
+        transition: "all .13s",
+        flexShrink: 0,
+        "&:hover": {
+          background: collapsed ? "rgba(245,158,11,.18)" : S.elevated,
+          color: collapsed ? S.accentText : S.text,
+          borderColor: collapsed ? "rgba(245,158,11,.35)" : S.borderMid,
+        },
+      }}
+    >
+      {collapsed ? <KeyboardDoubleArrowRightIcon sx={{ fontSize: 16 }} /> : <KeyboardDoubleArrowLeftIcon sx={{ fontSize: 16 }} />}
+    </Box>
+  </Tooltip>
 );
 
 /* ─── Nav item ───────────────────────────────────────────────────── */
@@ -173,33 +201,33 @@ const Sidebar = ({ open = true, onToggle }) => {
 
   /* ── Sub-item configs ── */
   const salesSubItems = [
-    { label: "Quotation",   icon: <ReceiptIcon      sx={{ fontSize: 16 }} />, path: "/quotation" },
-    { label: "Create Bill", icon: <ReceiptLongIcon  sx={{ fontSize: 16 }} />, path: "/customers/bill" },
+    { label: "Quotes",      icon: <ReceiptIcon      sx={{ fontSize: 16 }} />, path: "/quotation" },
+    { label: "New Invoice", icon: <ReceiptLongIcon  sx={{ fontSize: 16 }} />, path: "/customers/bill" },
   ];
   const productSubItems = [
-    { label: "Add Products",    icon: <AddBoxIcon   sx={{ fontSize: 16 }} />, path: "/products/add" },
-    { label: "Product Details", icon: <ListAltIcon  sx={{ fontSize: 16 }} />, path: "/products/details" },
+    { label: "Add Inventory",   icon: <AddBoxIcon   sx={{ fontSize: 16 }} />, path: "/products/add" },
+    { label: "Inventory List",  icon: <ListAltIcon  sx={{ fontSize: 16 }} />, path: "/products/details" },
   ];
   const customerSubItems = [
-    { label: "Create Customer",   icon: <PersonAddIcon  sx={{ fontSize: 16 }} />, path: "/customers/create" },
-    { label: "Customer Details",  icon: <PeopleIcon     sx={{ fontSize: 16 }} />, path: "/customers/details" },
-    { label: "Customer Payments", icon: <PaymentsIcon   sx={{ fontSize: 16 }} />, path: "/customers/payments" },
+    { label: "New Customer",      icon: <PersonAddIcon  sx={{ fontSize: 16 }} />, path: "/customers/create" },
+    { label: "Customer Directory",icon: <PeopleIcon     sx={{ fontSize: 16 }} />, path: "/customers/details" },
+    { label: "Receivables",       icon: <PaymentsIcon   sx={{ fontSize: 16 }} />, path: "/customers/payments" },
   ];
   const supplierSubItems = [
-    { label: "Supplier Create", icon: <AddBusinessIcon  sx={{ fontSize: 16 }} />, path: "/suppliers/create" },
-    { label: "Pay to Supplier", icon: <PaymentsIcon     sx={{ fontSize: 16 }} />, path: "/suppliers/payment" },
-    { label: "Supplier Details", icon: <ListAltIcon     sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+    { label: "New Supplier",    icon: <AddBusinessIcon  sx={{ fontSize: 16 }} />, path: "/suppliers/create" },
+    { label: "Payables",        icon: <PaymentsIcon     sx={{ fontSize: 16 }} />, path: "/suppliers/payment" },
+    { label: "Supplier Directory", icon: <ListAltIcon   sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
   ];
   const purchaseSubItems = [
-    { label: "Purchase Products", icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/suppliers/products" },
-    { label: "Purchase Details",  icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/purchase/details" },
+    { label: "New Purchase",      icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/suppliers/products" },
+    { label: "Purchase Ledger",   icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/purchase/details" },
   ];
   const settingsSubItems = [
-    { label: "Company Profile",         icon: <AddBusinessIcon sx={{ fontSize: 16 }} />, path: "/company-profile" },
-    { label: "Invoice Settings",        icon: <ReceiptIcon     sx={{ fontSize: 16 }} />, path: "/invoice-settings" },
-    { label: "Product Defaults",        icon: <InventoryIcon   sx={{ fontSize: 16 }} />, path: "/product-defaults" },
-    { label: "User Management",         icon: <PeopleIcon      sx={{ fontSize: 16 }} />, path: "/user-management" },
-    { label: "Backup & Data",           icon: <BackupIcon      sx={{ fontSize: 16 }} />, path: "/backup-data" },
+    { label: "Business Profile",        icon: <AddBusinessIcon sx={{ fontSize: 16 }} />, path: "/company-profile" },
+    { label: "Invoice Preferences",     icon: <ReceiptIcon     sx={{ fontSize: 16 }} />, path: "/invoice-settings" },
+    { label: "Inventory Defaults",      icon: <InventoryIcon   sx={{ fontSize: 16 }} />, path: "/product-defaults" },
+    { label: "Team Access",             icon: <PeopleIcon      sx={{ fontSize: 16 }} />, path: "/user-management" },
+    { label: "Backup & Restore",        icon: <BackupIcon      sx={{ fontSize: 16 }} />, path: "/backup-data" },
   ];
 
   return (
@@ -220,7 +248,7 @@ const Sidebar = ({ open = true, onToggle }) => {
         height: 52,
         display: "flex", alignItems: "center",
         justifyContent: collapsed ? "center" : "space-between",
-        px: collapsed ? 0 : 0,
+        px: collapsed ? 0.8 : 1.1,
         borderBottom: `1px solid ${S.border}`,
         flexShrink: 0,
       }}>
@@ -242,44 +270,16 @@ const Sidebar = ({ open = true, onToggle }) => {
 
         {/* Collapsed: just the dot mark */}
         {collapsed && (
-          <Box sx={{ width: 28, height: 28, background: S.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Typography sx={{ fontSize: 12, fontWeight: 900, color: S.bg, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>R</Typography>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0.8 }}>
+            <Box sx={{ width: 28, height: 28, background: S.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Typography sx={{ fontSize: 12, fontWeight: 900, color: S.bg, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>R</Typography>
+            </Box>
+            <SideToggleBtn collapsed={collapsed} onClick={onToggle} />
           </Box>
         )}
 
-        {/* Toggle btn */}
-        {!collapsed && (
-          <Box
-            onClick={onToggle}
-            sx={{
-              width: 28, height: 52,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer", color: S.textMute, flexShrink: 0,
-              borderLeft: `1px solid ${S.border}`,
-              "&:hover": { background: S.elevated, color: S.text },
-              transition: "all .14s",
-            }}
-          >
-            <ChevronLeftIcon sx={{ fontSize: 15 }} />
-          </Box>
-        )}
+        {!collapsed && <SideToggleBtn collapsed={collapsed} onClick={onToggle} />}
       </Box>
-
-      {/* Collapsed toggle */}
-      {collapsed && (
-        <Box
-          onClick={onToggle}
-          sx={{
-            height: 36,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", color: S.textMute, borderBottom: `1px solid ${S.border}`,
-            "&:hover": { background: S.elevated, color: S.text },
-            transition: "all .14s",
-          }}
-        >
-          <ChevronRightIcon sx={{ fontSize: 15 }} />
-        </Box>
-      )}
 
       {/* ── Scrollable nav ── */}
       <Box sx={{
@@ -324,7 +324,7 @@ const Sidebar = ({ open = true, onToggle }) => {
           <>
             <NavBtn
               icon={<LocalShippingIcon sx={{ fontSize: 18 }} />}
-              label="Purchase"
+              label="Purchasement"
               active={isPurchaseActive && !collapsed}
               collapsed={collapsed}
               hasChildren
@@ -349,7 +349,7 @@ const Sidebar = ({ open = true, onToggle }) => {
           <>
             <NavBtn
               icon={<PeopleIcon sx={{ fontSize: 18 }} />}
-              label="Customer"
+              label="Customers"
               active={isCustomerActive && !collapsed}
               collapsed={collapsed}
               hasChildren
@@ -374,7 +374,7 @@ const Sidebar = ({ open = true, onToggle }) => {
           <>
             <NavBtn
               icon={<AddBusinessIcon sx={{ fontSize: 18 }} />}
-              label="Supplier"
+              label="Suppliers"
               active={isSupplierActive && !collapsed}
               collapsed={collapsed}
               hasChildren
@@ -397,7 +397,7 @@ const Sidebar = ({ open = true, onToggle }) => {
         {/* Product */}
         <NavBtn
           icon={<InventoryIcon sx={{ fontSize: 18 }} />}
-          label="Product"
+          label="Inventory"
           active={isProductsActive && !collapsed}
           collapsed={collapsed}
           hasChildren

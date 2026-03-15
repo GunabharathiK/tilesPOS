@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Box, Typography } from "@mui/material";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, AreaChart, Area,
+  CartesianGrid, Tooltip,
 } from "recharts";
 import TrendingUpIcon           from "@mui/icons-material/TrendingUp";
 import TrendingDownIcon         from "@mui/icons-material/TrendingDown";
@@ -12,10 +12,11 @@ import CheckCircleIcon          from "@mui/icons-material/CheckCircle";
 import HourglassEmptyIcon       from "@mui/icons-material/HourglassEmpty";
 import InventoryIcon            from "@mui/icons-material/Inventory";
 import WarningAmberIcon         from "@mui/icons-material/WarningAmber";
+import ArrowForwardIcon         from "@mui/icons-material/ArrowForward";
 import { useNavigate } from "react-router-dom";
 import { getSuppliers } from "../services/supplierService";
 
-/* ── Design tokens — unified across entire app ── */
+/* ── Design tokens ── */
 const T = {
   primary:      "#1a56a0",
   primaryDark:  "#0f3d7a",
@@ -43,7 +44,6 @@ const T = {
 
 /* ── Helpers ── */
 const INR = (n = 0) => "₹" + Number(n).toLocaleString("en-IN");
-const pct = (a, b) => b > 0 ? Math.round(((a - b) / b) * 100) : a > 0 ? 100 : 0;
 
 const getPayStatus = s => {
   const due  = Number(s.totalDue  || 0);
@@ -52,6 +52,29 @@ const getPayStatus = s => {
   if (paid > 0) return "Partial";
   return "Pending";
 };
+
+/* ── View All button ── */
+const ViewAllBtn = ({ onClick, label = "View All" }) => (
+  <Box
+    onClick={onClick}
+    sx={{
+      display: "inline-flex", alignItems: "center", gap: "5px",
+      px: 1.4, py: "5px",
+      fontSize: 11.5, fontWeight: 700, color: T.primary,
+      border: `1px solid ${T.border}`,
+      background: T.surface,
+      cursor: "pointer", userSelect: "none",
+      transition: "all .15s",
+      "&:hover": {
+        background: T.primary, color: "#fff", borderColor: T.primary,
+        "& .arrow-icon": { transform: "translateX(2px)" },
+      },
+    }}
+  >
+    {label}
+    <ArrowForwardIcon className="arrow-icon" sx={{ fontSize: 12, transition: "transform .15s" }} />
+  </Box>
+);
 
 /* ── Chart tooltip ── */
 const ChartTip = ({ active, payload, label }) => {
@@ -100,12 +123,12 @@ const MetricCard = ({ label, value, sub, delta, icon, accent, accentLight }) => 
 /* ── Panel ── */
 const Panel = ({ title, subtitle, accent, right, children, noPad }) => (
   <Box sx={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 1px 3px rgba(15,23,42,.06)", overflow: "hidden", display: "flex", flexDirection: "column", height: "100%" }}>
-    <Box sx={{ px: 2.5, py: 1.5, borderBottom: `2px solid ${accent || T.primary}`, background: `linear-gradient(to right, ${T.primaryLight}, ${T.surface})`, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 1, flexShrink: 0 }}>
+    <Box sx={{ px: 2.5, py: 1.5, borderBottom: `2px solid ${accent || T.primary}`, background: `linear-gradient(to right, ${T.primaryLight}, ${T.surface})`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, flexShrink: 0 }}>
       <Box>
         <Typography sx={{ fontSize: 13.5, fontWeight: 800, color: T.dark, lineHeight: 1.2 }}>{title}</Typography>
         {subtitle && <Typography sx={{ fontSize: 11.5, color: T.muted, mt: 0.3 }}>{subtitle}</Typography>}
       </Box>
-      {right && <Box sx={{ flexShrink: 0 }}>{right}</Box>}
+      {right && <Box sx={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 1 }}>{right}</Box>}
     </Box>
     <Box sx={noPad ? {} : { p: 2 }}>{children}</Box>
   </Box>
@@ -147,7 +170,7 @@ const ProgressBar = ({ value, max, color }) => {
   );
 };
 
-/* ── Strip item (supplier summary row) ── */
+/* ── Strip item ── */
 const StripItem = ({ label, value, color }) => (
   <Box sx={{ px: 2, py: 1.2, borderRight: `1px solid ${T.border}`, flex: 1, minWidth: 0 }}>
     <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".07em", mb: 0.4 }}>{label}</Typography>
@@ -170,7 +193,6 @@ const SupplierManagement = () => {
     })();
   }, []);
 
-  /* ── Aggregated stats ── */
   const stats = useMemo(() => {
     const totalAmount  = suppliers.reduce((s, x) => s + Number(x.totalValue || 0), 0);
     const totalPaid    = suppliers.reduce((s, x) => s + Number(x.totalPaid  || 0), 0);
@@ -186,19 +208,16 @@ const SupplierManagement = () => {
     return { total: suppliers.length, totalAmount, totalPaid, totalPending, totalProducts: new Set(allProducts).size, paidCount, partialCount, pendingCount, colRate };
   }, [suppliers]);
 
-  /* ── Pending suppliers ── */
   const pendingList = useMemo(() =>
     suppliers.filter(s => Number(s.totalDue || 0) > 0).sort((a, b) => Number(b.totalDue || 0) - Number(a.totalDue || 0)).slice(0, 8),
     [suppliers]
   );
 
-  /* ── Top suppliers by total value ── */
   const topSuppliers = useMemo(() =>
     [...suppliers].sort((a, b) => Number(b.totalValue || 0) - Number(a.totalValue || 0)).slice(0, 6),
     [suppliers]
   );
 
-  /* ── Bar chart data ── */
   const chartData = useMemo(() =>
     pendingList.map(s => ({
       name: (s.companyName || s.name || "-").slice(0, 10),
@@ -207,7 +226,6 @@ const SupplierManagement = () => {
     })), [pendingList]
   );
 
-  /* ── Category breakdown ── */
   const categoryData = useMemo(() => {
     const map = {};
     suppliers.forEach(s => {
@@ -217,7 +235,6 @@ const SupplierManagement = () => {
     return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([name, count]) => ({ name, count }));
   }, [suppliers]);
 
-  /* ── Payment terms breakdown ── */
   const termsData = useMemo(() => {
     const map = {};
     suppliers.forEach(s => { const k = s.paymentTerms || "Unknown"; map[k] = (map[k] || 0) + 1; });
@@ -230,7 +247,6 @@ const SupplierManagement = () => {
     </Box>
   );
 
-  /* ════════════════════════════════════ RENDER ════ */
   return (
     <Box sx={{ p: 0, background: T.bg, minHeight: "100%", fontFamily: "'Noto Sans', sans-serif" }}>
 
@@ -242,12 +258,11 @@ const SupplierManagement = () => {
             {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
           </Typography>
         </Box>
-        {/* Header health strip */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 0 }}>
           {[
-            { label: "Collection Rate",   value: `${stats.colRate}%`,       color: stats.colRate >= 80 ? T.success : stats.colRate >= 50 ? T.warning : T.danger },
-            { label: "Pending Suppliers", value: stats.pendingCount,         color: stats.pendingCount > 0 ? T.danger : T.success },
-            { label: "Partial Payments",  value: stats.partialCount,         color: stats.partialCount > 0 ? T.warning : T.success },
+            { label: "Collection Rate",   value: `${stats.colRate}%`,   color: stats.colRate >= 80 ? T.success : stats.colRate >= 50 ? T.warning : T.danger },
+            { label: "Pending Suppliers", value: stats.pendingCount,    color: stats.pendingCount > 0 ? T.danger : T.success },
+            { label: "Partial Payments",  value: stats.partialCount,    color: stats.partialCount > 0 ? T.warning : T.success },
           ].map(({ label, value, color }, i) => (
             <Box key={label} sx={{ pl: i === 0 ? 0 : 2.5, pr: 2.5, borderLeft: i > 0 ? `1px solid ${T.border}` : "none", textAlign: "center", minWidth: 90 }}>
               <Typography sx={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", whiteSpace: "nowrap", mb: 0.4 }}>{label}</Typography>
@@ -270,22 +285,22 @@ const SupplierManagement = () => {
 
       <Box sx={{ px: 2.5, display: "flex", flexDirection: "column", gap: 2, pb: 3 }}>
 
-        {/* ══ ROW 1 — KPI metric cards ══ */}
+        {/* ══ ROW 1 — KPI cards ══ */}
         <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)", xl: "repeat(5,1fr)" } }}>
-          <MetricCard label="Total Suppliers"  value={stats.total}              sub={`${stats.paidCount} fully paid`}              accent={T.primary}  accentLight={T.primaryLight}  icon={<LocalShippingIcon        sx={{ fontSize: 18 }} />} />
-          <MetricCard label="Total Purchase"   value={INR(stats.totalAmount)}   sub="Cumulative purchase value"                     accent={T.violet}   accentLight={T.violetLight}   icon={<AccountBalanceWalletIcon sx={{ fontSize: 18 }} />} />
-          <MetricCard label="Amount Paid"      value={INR(stats.totalPaid)}     sub="Cleared to suppliers"                          accent={T.success}  accentLight={T.successLight}  icon={<CheckCircleIcon          sx={{ fontSize: 18 }} />} />
-          <MetricCard label="Amount Pending"   value={INR(stats.totalPending)}  sub={`${stats.pendingCount + stats.partialCount} suppliers due`} accent={T.danger} accentLight={T.dangerLight} icon={<HourglassEmptyIcon sx={{ fontSize: 18 }} />} />
-          <MetricCard label="Product Types"    value={stats.totalProducts}      sub="Unique products supplied"                      accent={T.orange}   accentLight={T.orangeLight}   icon={<InventoryIcon            sx={{ fontSize: 18 }} />} />
+          <MetricCard label="Total Suppliers"  value={stats.total}             sub={`${stats.paidCount} fully paid`}                            accent={T.primary}  accentLight={T.primaryLight}  icon={<LocalShippingIcon        sx={{ fontSize: 18 }} />} />
+          <MetricCard label="Total Purchase"   value={INR(stats.totalAmount)}  sub="Cumulative purchase value"                                  accent={T.violet}   accentLight={T.violetLight}   icon={<AccountBalanceWalletIcon sx={{ fontSize: 18 }} />} />
+          <MetricCard label="Amount Paid"      value={INR(stats.totalPaid)}    sub="Cleared to suppliers"                                       accent={T.success}  accentLight={T.successLight}  icon={<CheckCircleIcon          sx={{ fontSize: 18 }} />} />
+          <MetricCard label="Amount Pending"   value={INR(stats.totalPending)} sub={`${stats.pendingCount + stats.partialCount} suppliers due`} accent={T.danger}   accentLight={T.dangerLight}   icon={<HourglassEmptyIcon       sx={{ fontSize: 18 }} />} />
+          <MetricCard label="Product Types"    value={stats.totalProducts}     sub="Unique products supplied"                                   accent={T.orange}   accentLight={T.orangeLight}   icon={<InventoryIcon            sx={{ fontSize: 18 }} />} />
         </Box>
 
         {/* ══ ROW 2 — Summary strip ══ */}
         <Box sx={{ background: T.surface, border: `1px solid ${T.border}`, display: "flex", overflow: "hidden" }}>
           <Box sx={{ width: 4, background: T.primary, flexShrink: 0 }} />
-          <StripItem label="Total Suppliers"  value={stats.total}            color={T.primary} />
-          <StripItem label="Fully Paid"       value={stats.paidCount}        color={T.success} />
-          <StripItem label="Partial"          value={stats.partialCount}     color={T.warning} />
-          <StripItem label="Pending"          value={stats.pendingCount}     color={T.danger}  />
+          <StripItem label="Total Suppliers" value={stats.total}        color={T.primary} />
+          <StripItem label="Fully Paid"      value={stats.paidCount}    color={T.success} />
+          <StripItem label="Partial"         value={stats.partialCount} color={T.warning} />
+          <StripItem label="Pending"         value={stats.pendingCount} color={T.danger}  />
           <Box sx={{ px: 2, py: 1.2, flex: 1, minWidth: 0 }}>
             <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".07em", mb: 0.4 }}>Collection Rate</Typography>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -300,7 +315,6 @@ const SupplierManagement = () => {
         {/* ══ ROW 3 — Bar chart + Pending list ══ */}
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "minmax(0,2fr) minmax(0,1fr)" }, alignItems: "stretch" }}>
 
-          {/* Payment overview chart */}
           <Panel
             title="Supplier Payment Overview"
             subtitle="Paid vs Due — top pending suppliers"
@@ -319,9 +333,7 @@ const SupplierManagement = () => {
           >
             <Box sx={{ p: 2 }}>
               {chartData.length === 0 ? (
-                <Box sx={{ py: 8, textAlign: "center" }}>
-                  <Typography sx={{ fontSize: 13, color: T.faint }}>No pending supplier data</Typography>
-                </Box>
+                <Box sx={{ py: 8, textAlign: "center" }}><Typography sx={{ fontSize: 13, color: T.faint }}>No pending supplier data</Typography></Box>
               ) : (
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barSize={20} barGap={4}>
@@ -329,15 +341,14 @@ const SupplierManagement = () => {
                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: T.muted }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 10, fill: T.faint }} tickFormatter={v => v > 999 ? `${Math.round(v/1000)}k` : v} axisLine={false} tickLine={false} width={40} />
                     <Tooltip content={<ChartTip />} cursor={{ fill: "rgba(0,0,0,.03)" }} />
-                    <Bar dataKey="Paid" fill={T.success} radius={[0,0,0,0]} />
-                    <Bar dataKey="Due"  fill={T.danger}  radius={[0,0,0,0]} />
+                    <Bar dataKey="Paid" fill={T.success} />
+                    <Bar dataKey="Due"  fill={T.danger}  />
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </Box>
           </Panel>
 
-          {/* Pending payments list */}
           <Panel
             title="Pending Payments"
             subtitle="Suppliers with outstanding dues"
@@ -351,15 +362,11 @@ const SupplierManagement = () => {
             }
           >
             {pendingList.length === 0 ? (
-              <Box sx={{ py: 6, textAlign: "center" }}>
-                <Typography sx={{ fontSize: 13, color: T.faint }}>No pending supplier payments 🎉</Typography>
-              </Box>
+              <Box sx={{ py: 6, textAlign: "center" }}><Typography sx={{ fontSize: 13, color: T.faint }}>No pending supplier payments 🎉</Typography></Box>
             ) : pendingList.map((s, idx) => {
               const status = getPayStatus(s);
-              const maxDue = pendingList[0]?.totalDue || 1;
               return (
                 <Box key={s._id} sx={{ px: 2, py: 1.2, display: "flex", alignItems: "center", gap: 1.4, borderBottom: `1px solid ${T.borderLight}`, background: idx % 2 === 0 ? T.surface : T.surfaceAlt, "&:hover": { background: T.primaryLight }, transition: "background .12s" }}>
-                  {/* Rank */}
                   <Box sx={{ width: 20, textAlign: "right", flexShrink: 0 }}>
                     <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.faint }}>{idx + 1}</Typography>
                   </Box>
@@ -382,25 +389,35 @@ const SupplierManagement = () => {
         {/* ══ ROW 4 — Top Suppliers + Payment Terms + Categories ══ */}
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "minmax(0,3fr) minmax(0,2fr)" }, alignItems: "stretch" }}>
 
-          {/* Top suppliers by value */}
-          <Panel title="Top Suppliers by Purchase Value" subtitle="Highest cumulative purchase suppliers" accent={T.success} noPad>
+          {/* ── Top Suppliers — with View All button ── */}
+          <Panel
+            title="Top Suppliers by Purchase Value"
+            subtitle="Highest cumulative purchase suppliers"
+            accent={T.success}
+            noPad
+            right={
+              <ViewAllBtn onClick={() => navigate("/suppliers/details")} label="View All Suppliers" />
+            }
+          >
             <Box sx={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead><tr>
-                  <TH>#</TH>
-                  <TH>Supplier</TH>
-                  <TH>City</TH>
-                  <TH>Terms</TH>
-                  <TH align="right">Purchase Total</TH>
-                  <TH align="right">Paid</TH>
-                  <TH align="right">Due</TH>
-                  <TH>Status</TH>
-                </tr></thead>
+                <thead>
+                  <tr>
+                    <TH>#</TH>
+                    <TH>Supplier</TH>
+                    <TH>City</TH>
+                    <TH>Terms</TH>
+                    <TH align="right">Purchase Total</TH>
+                    <TH align="right">Paid</TH>
+                    <TH align="right">Due</TH>
+                    <TH>Status</TH>
+                  </tr>
+                </thead>
                 <tbody>
                   {topSuppliers.map((s, idx) => (
                     <tr key={s._id} style={{ background: idx % 2 === 0 ? T.surface : T.surfaceAlt }}>
                       <td style={{ padding: "10px 14px", borderBottom: `1px solid ${T.borderLight}`, width: 32 }}>
-                        <Box sx={{ width: 22, height: 22, background: idx === 0 ? "#fef3c7" : T.surfaceAlt, border: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: idx === 0 ? "#b45309" : T.muted }}>
+                        <Box sx={{ width: 22, height: 22, background: idx === 0 ? "#fef3c7" : T.surfaceAlt, border: `1px solid ${idx === 0 ? "#fcd34d" : T.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: idx === 0 ? "#b45309" : T.muted }}>
                           {idx + 1}
                         </Box>
                       </td>
@@ -410,19 +427,21 @@ const SupplierManagement = () => {
                       <TD align="right" mono bold>{INR(s.totalValue || 0)}</TD>
                       <TD align="right" mono color={T.success}>{INR(s.totalPaid || 0)}</TD>
                       <TD align="right" mono color={Number(s.totalDue || 0) > 0 ? T.danger : T.faint}>{INR(s.totalDue || 0)}</TD>
-                      <td style={{ padding: "10px 14px", borderBottom: `1px solid ${T.borderLight}` }}><Badge status={getPayStatus(s)} /></td>
+                      <td style={{ padding: "10px 14px", borderBottom: `1px solid ${T.borderLight}` }}>
+                        <Badge status={getPayStatus(s)} />
+                      </td>
                     </tr>
                   ))}
-                  {topSuppliers.length === 0 && <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: T.faint, fontSize: 13 }}>No suppliers yet</td></tr>}
+                  {topSuppliers.length === 0 && (
+                    <tr><td colSpan={8} style={{ padding: "32px", textAlign: "center", color: T.faint, fontSize: 13 }}>No suppliers yet</td></tr>
+                  )}
                 </tbody>
               </table>
             </Box>
           </Panel>
 
-          {/* Right column: Terms + Categories */}
+          {/* Right column */}
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-
-            {/* Payment terms distribution */}
             <Panel title="Payment Terms Distribution" subtitle="How many suppliers per term" accent={T.violet}>
               {termsData.length === 0 ? (
                 <Typography sx={{ fontSize: 13, color: T.faint, textAlign: "center", py: 3 }}>No data</Typography>
@@ -437,7 +456,6 @@ const SupplierManagement = () => {
               ))}
             </Panel>
 
-            {/* Category breakdown */}
             <Panel title="Product Categories" subtitle="Categories supplied by vendors" accent={T.orange}>
               {categoryData.length === 0 ? (
                 <Typography sx={{ fontSize: 13, color: T.faint, textAlign: "center", py: 3 }}>No categories yet</Typography>
@@ -461,19 +479,34 @@ const SupplierManagement = () => {
           </Box>
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", overflow: "hidden" }}>
             {[
-              { label: "Total Suppliers",   value: stats.total,            color: T.primary,  icon: <LocalShippingIcon        sx={{ fontSize: 16 }} /> },
-              { label: "Fully Paid",        value: stats.paidCount,        color: T.success,  icon: <CheckCircleIcon           sx={{ fontSize: 16 }} /> },
-              { label: "Partial Payments",  value: stats.partialCount,     color: T.warning,  icon: <HourglassEmptyIcon        sx={{ fontSize: 16 }} /> },
-              { label: "Pending Payments",  value: stats.pendingCount,     color: T.danger,   icon: <WarningAmberIcon          sx={{ fontSize: 16 }} /> },
-              { label: "Product Types",     value: stats.totalProducts,    color: T.orange,   icon: <InventoryIcon             sx={{ fontSize: 16 }} /> },
-              { label: "Collection Rate",   value: `${stats.colRate}%`,    color: stats.colRate >= 80 ? T.success : stats.colRate >= 50 ? T.warning : T.danger, icon: <AccountBalanceWalletIcon sx={{ fontSize: 16 }} /> },
-            ].map(({ label, value, color, icon }, i) => (
-              <Box key={label} sx={{ px: 2, py: 1.6, borderRight: i < 5 ? `1px solid ${T.border}` : "none", display: "flex", alignItems: "center", gap: 1.2 }}>
+              { label: "Total Suppliers",  value: stats.total,            color: T.primary, icon: <LocalShippingIcon        sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+              { label: "Fully Paid",       value: stats.paidCount,        color: T.success, icon: <CheckCircleIcon          sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+              { label: "Partial Payments", value: stats.partialCount,     color: T.warning, icon: <HourglassEmptyIcon       sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+              { label: "Pending Payments", value: stats.pendingCount,     color: T.danger,  icon: <WarningAmberIcon         sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+              { label: "Product Types",    value: stats.totalProducts,    color: T.orange,  icon: <InventoryIcon            sx={{ fontSize: 16 }} />, path: "/products"          },
+              { label: "Collection Rate",  value: `${stats.colRate}%`,    color: stats.colRate >= 80 ? T.success : stats.colRate >= 50 ? T.warning : T.danger, icon: <AccountBalanceWalletIcon sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
+            ].map(({ label, value, color, icon, path }, i) => (
+              <Box
+                key={label}
+                onClick={() => navigate(path)}
+                sx={{
+                  px: 2, py: 1.6,
+                  borderRight: i < 5 ? `1px solid ${T.border}` : "none",
+                  display: "flex", alignItems: "center", gap: 1.2,
+                  cursor: "pointer", transition: "background .12s",
+                  "&:hover": { background: T.primaryLight },
+                  "&:hover .arrow": { opacity: 1, transform: "translateX(0)" },
+                }}
+              >
                 <Box sx={{ color, flexShrink: 0 }}>{icon}</Box>
-                <Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography sx={{ fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em" }}>{label}</Typography>
                   <Typography sx={{ fontSize: 18, fontWeight: 800, color, fontFamily: "'DM Mono', monospace", lineHeight: 1.2 }}>{value}</Typography>
                 </Box>
+                <ArrowForwardIcon
+                  className="arrow"
+                  sx={{ fontSize: 13, color, opacity: 0, transform: "translateX(-4px)", transition: "all .15s", flexShrink: 0 }}
+                />
               </Box>
             ))}
           </Box>

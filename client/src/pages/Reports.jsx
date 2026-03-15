@@ -723,17 +723,6 @@ const Reports = () => {
   return (
     <Box sx={{ p: 0, background: T.bg, minHeight: "100%", fontFamily: "'Noto Sans', sans-serif" }}>
 
-      {/* Page header */}
-      <Box sx={{ px: 3, py: 1.8, background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2.5 }}>
-        <Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.dark, lineHeight: 1.2, letterSpacing: "-.01em" }}>Reports</Typography>
-          <Typography sx={{ fontSize: 12, color: T.muted }}>Sales, collections, stock, GST and business insights</Typography>
-        </Box>
-        <Box sx={{ fontFamily: "'DM Mono', monospace", fontSize: 11, fontWeight: 700, color: T.muted, background: T.surfaceAlt, border: `1px solid ${T.border}`, px: 1.5, py: 0.6 }}>
-          {new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-        </Box>
-      </Box>
-
       <Box sx={{ px: 2.5, display: "flex", flexDirection: "column", gap: 2 }}>
 
         {/* Report type selector */}

@@ -1398,13 +1398,6 @@ const Invoice = ({ mode = "invoice" }) => {
   /* ─── Render ──────────────────────────────────────────── */
   return (
     <Box sx={{ minHeight: "100%", background: pageBg, py: { xs: 1.5, md: 2 } }}>
-      <Box sx={{ mb: 2.4, px: { xs: 0.6, md: 0.8 } }}>
-        <Typography sx={{ fontSize: { xs: 24, md: 30 }, fontWeight: 900, color: "#0f172a", lineHeight: 1.1 }}>
-          {isQuotation ? "Create Quotation" : "Create Invoice"}
-        </Typography>
-        <Typography sx={{ color: muted, mt: 0.55, fontSize: 12.5 }}>{topDateLabel}</Typography>
-      </Box>
-
       <Box sx={{ display: "grid", gridTemplateColumns: isQuotation ? "1fr" : { xs: "1fr", xl: "minmax(0, 1.9fr) minmax(300px, 0.72fr)" }, gap: 2.2, alignItems: "start" }}>
 
         {/* ── Left column ── */}

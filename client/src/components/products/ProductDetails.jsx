@@ -19,7 +19,7 @@ import ConfirmDialog from "../common/ConfirmDialog";
 import toast from "react-hot-toast";
 import { mapRowByFieldAliases, parseCsvRows } from "../../utils/importByField";
 
-/* ── Design tokens ──────────────────────────────────────────── */
+/* ── Design tokens ── */
 const T = {
   primary:      "#1a56a0",
   primaryDark:  "#0f3d7a",
@@ -57,7 +57,7 @@ const getImageSrc = (p = {}) => {
 const fmt      = (n = 0) => Number(n).toLocaleString("en-IN");
 const fmtPrice = (n = 0) => `₹${fmt(Number(n).toFixed(2))}`;
 
-/* ── Input style — zero border radius ── */
+/* ── Input style ── */
 const inpSx = {
   "& .MuiOutlinedInput-root": {
     borderRadius: 0,
@@ -464,66 +464,41 @@ const ProductDetails = () => {
           "&:hover": { background: "#e8f0fb" },
         }}
       >
-        {/* SKU */}
         <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, fontFamily: "monospace" }}>
           {p.code || "—"}
         </Typography>
-
-        {/* Name + Brand */}
         <Box>
           <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, lineHeight: 1.3 }}>{p.name}</Typography>
           {p.brand && <Typography sx={{ fontSize: 10, color: T.muted, mt: 0.1 }}>{p.brand}</Typography>}
         </Box>
-
-        {/* Category */}
         <Box>
           {p.category
             ? <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: catStyle.bg, color: catStyle.color, fontSize: 10, fontWeight: 700 }}>{p.category}</Box>
             : <Typography sx={{ fontSize: 11, color: T.muted }}>—</Typography>}
         </Box>
-
-        {/* Brand */}
         <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 500 }}>{p.brand || "—"}</Typography>
-
-        {/* Size */}
         <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 600 }}>{p.size || "—"}</Typography>
-
-        {/* Finish / Rack */}
         <Typography sx={{ fontSize: 11, color: T.muted }}>{p.finish || p.rackLocation || "—"}</Typography>
-
-        {/* Source */}
         <Box>
           {p.isSupplierItem
             ? <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: "#fef3c7", color: "#92400e", fontSize: 10, fontWeight: 700 }}>Supplier</Box>
             : <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: "#e0f2fe", color: "#075985", fontSize: 10, fontWeight: 700 }}>Own</Box>}
         </Box>
-
-        {/* Retail Price */}
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, fontFamily: "'Rajdhani', sans-serif" }}>
           {fmtPrice(totalPrice)}/{p.uom || "sqft"}
         </Typography>
-
-        {/* Dealer Price */}
         <Typography sx={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: "'Rajdhani', sans-serif" }}>
           {p.dealerPrice > 0 ? `${fmtPrice(p.dealerPrice)}/${p.uom || "sqft"}` : "—"}
         </Typography>
-
-        {/* Cost Price */}
         <Typography sx={{ fontSize: 11, color: T.muted, fontFamily: "'Rajdhani', sans-serif" }}>
           {p.purchasePrice > 0 ? fmtPrice(p.purchasePrice) : "—"}
         </Typography>
-
-        {/* Stock sqft */}
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: isLow ? T.danger : T.dark, fontFamily: "'Rajdhani', sans-serif" }}>
           {fmt(stock)} sqft
         </Typography>
-
-        {/* Boxes */}
         <Typography sx={{ fontSize: 11, color: T.text, fontWeight: 500, textAlign: "center" }}>
           {p.stockBoxes || "—"}
         </Typography>
-
-        {/* Actions */}
         <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
           <Box
             onClick={(e) => { e.stopPropagation(); navigate('/products/add', { state: { editProduct: p } }); }}
@@ -573,68 +548,21 @@ const ProductDetails = () => {
         const ownCount      = products.filter((p) => !p.isSupplierItem).length;
         const supplierCount = products.filter((p) =>  p.isSupplierItem).length;
         const cards = [
-          {
-            label: "Total Products",
-            val: products.length,
-            sub: "All inventory items",
-            icon: "📦",
-            accent: T.primary,
-            bg: "#edf4ff",
-            borderColor: "#bfd6f6",
-          },
-          {
-            label: "Own Products",
-            val: ownCount,
-            sub: "In-house stock",
-            icon: "🏬",
-            accent: "#0369a1",
-            bg: "#e0f2fe",
-            borderColor: "#7dd3fc",
-          },
-          {
-            label: "Supplier Products",
-            val: supplierCount,
-            sub: "Sourced externally",
-            icon: "🚚",
-            accent: "#92400e",
-            bg: "#fef3c7",
-            borderColor: "#fcd34d",
-          },
-          {
-            label: "Low Stock",
-            val: lowStock,
-            sub: lowStock > 0 ? "Need restock" : "All stocked up",
-            icon: lowStock > 0 ? "⚠️" : "✅",
-            accent: lowStock > 0 ? T.danger : T.success,
-            bg: lowStock > 0 ? "#fff1f0" : "#f0faf4",
-            borderColor: lowStock > 0 ? "#fca5a5" : "#6ee7b7",
-          },
+          { label: "Total Products",    val: products.length, sub: "All inventory items",  icon: "📦", accent: T.primary,    bg: "#edf4ff",  borderColor: "#bfd6f6" },
+          { label: "Own Products",      val: ownCount,        sub: "In-house stock",        icon: "🏬", accent: "#0369a1",   bg: "#e0f2fe",  borderColor: "#7dd3fc" },
+          { label: "Supplier Products", val: supplierCount,   sub: "Sourced externally",    icon: "🚚", accent: "#92400e",   bg: "#fef3c7",  borderColor: "#fcd34d" },
+          { label: "Low Stock",         val: lowStock,        sub: lowStock > 0 ? "Need restock" : "All stocked up", icon: lowStock > 0 ? "⚠️" : "✅", accent: lowStock > 0 ? T.danger : T.success, bg: lowStock > 0 ? "#fff1f0" : "#f0faf4", borderColor: lowStock > 0 ? "#fca5a5" : "#6ee7b7" },
         ];
         return (
           <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1.5, mb: 2 }}>
             {cards.map((c) => (
-              <Box key={c.label} sx={{
-                background: c.bg,
-                border: `1.5px solid ${c.borderColor}`,
-                px: 2.5, py: 2,
-                display: "flex", alignItems: "center", gap: 2,
-                position: "relative", overflow: "hidden",
-              }}>
-                {/* Left accent bar */}
+              <Box key={c.label} sx={{ background: c.bg, border: `1.5px solid ${c.borderColor}`, px: 2.5, py: 2, display: "flex", alignItems: "center", gap: 2, position: "relative", overflow: "hidden" }}>
                 <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: c.accent }} />
-                {/* Icon */}
                 <Box sx={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{c.icon}</Box>
-                {/* Text */}
                 <Box>
-                  <Typography sx={{ fontSize: 32, fontWeight: 900, color: c.accent, lineHeight: 1, fontFamily: "'Rajdhani', sans-serif" }}>
-                    {c.val}
-                  </Typography>
-                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: c.accent, lineHeight: 1.2, mt: 0.2 }}>
-                    {c.label}
-                  </Typography>
-                  <Typography sx={{ fontSize: 10, color: c.accent, opacity: 0.65, mt: 0.3, fontWeight: 500 }}>
-                    {c.sub}
-                  </Typography>
+                  <Typography sx={{ fontSize: 32, fontWeight: 900, color: c.accent, lineHeight: 1, fontFamily: "'Rajdhani', sans-serif" }}>{c.val}</Typography>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: c.accent, lineHeight: 1.2, mt: 0.2 }}>{c.label}</Typography>
+                  <Typography sx={{ fontSize: 10, color: c.accent, opacity: 0.65, mt: 0.3, fontWeight: 500 }}>{c.sub}</Typography>
                 </Box>
               </Box>
             ))}
@@ -644,7 +572,7 @@ const ProductDetails = () => {
 
       {/* ── Filters bar ── */}
       <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1.5, p: 1.2, background: T.white, border: `1px solid ${T.border}` }}>
-        <Box sx={{ position: "relative", "& input::placeholder": { color: "#c0cad8", opacity: 1 } }}>
+        <Box sx={{ position: "relative" }}>
           <Box sx={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.muted, pointerEvents: "none", display: "flex" }}>
             <SearchIcon sx={{ fontSize: 16 }} />
           </Box>
@@ -678,7 +606,6 @@ const ProductDetails = () => {
           <option value="newest">Newest</option>
         </select>
 
-        {/* Source tabs */}
         <Box sx={{ display: "flex", border: `1.5px solid ${T.border}`, overflow: "hidden", ml: "auto" }}>
           {[["all","All"],["own","Own"],["supplier","Supplier"]].map(([val, label]) => (
             <Box key={val} onClick={() => setTab(val)}
@@ -700,7 +627,8 @@ const ProductDetails = () => {
 
       {/* ── Table ── */}
       <Box sx={{ background: T.white, border: `1px solid ${T.border}`, boxShadow: "0 1px 4px rgba(0,0,0,.04)", overflow: "hidden" }}>
-        {/* Header */}
+
+        {/* Sticky header */}
         <Box sx={{ display: "grid", gridTemplateColumns: COL_WIDTHS, gap: "6px", px: 2, py: "10px", background: T.primary, borderBottom: `2px solid ${T.primaryDark}` }}>
           <TH>SKU</TH><TH>Tile Name</TH><TH>Category</TH><TH>Brand</TH>
           <TH>Size</TH><TH>Finish</TH><TH>Source</TH><TH>Retail Price</TH>
@@ -708,17 +636,28 @@ const ProductDetails = () => {
           <TH align="center">Boxes</TH><TH>Actions</TH>
         </Box>
 
-        {/* Body */}
-        {loading ? (
-          <Box sx={{ p: 6, textAlign: "center", color: T.muted, fontSize: 13 }}>Loading products...</Box>
-        ) : filtered.length === 0 ? (
-          <Box sx={{ p: 8, textAlign: "center" }}>
-            <Box sx={{ fontSize: 44, mb: 2, opacity: 0.15 }}>🧱</Box>
-            <Typography sx={{ color: T.muted, fontSize: 13 }}>No products match your filters</Typography>
-          </Box>
-        ) : (
-          filtered.map((p, idx) => <ProductRow key={p._id} p={p} idx={idx} />)
-        )}
+        {/* Scrollable body — ~10 rows before scroll */}
+        <Box
+          sx={{
+            overflowY: "auto",
+            maxHeight: "430px", /* ~10 rows × 43px each */
+            "&::-webkit-scrollbar": { width: 6 },
+            "&::-webkit-scrollbar-track": { background: "#f8fafc" },
+            "&::-webkit-scrollbar-thumb": { background: T.border, borderRadius: 3 },
+            "&::-webkit-scrollbar-thumb:hover": { background: T.muted },
+          }}
+        >
+          {loading ? (
+            <Box sx={{ p: 6, textAlign: "center", color: T.muted, fontSize: 13 }}>Loading products...</Box>
+          ) : filtered.length === 0 ? (
+            <Box sx={{ p: 8, textAlign: "center" }}>
+              <Box sx={{ fontSize: 44, mb: 2, opacity: 0.15 }}>🧱</Box>
+              <Typography sx={{ color: T.muted, fontSize: 13 }}>No products match your filters</Typography>
+            </Box>
+          ) : (
+            filtered.map((p, idx) => <ProductRow key={p._id} p={p} idx={idx} />)
+          )}
+        </Box>
 
         {/* Footer */}
         {!loading && filtered.length > 0 && (

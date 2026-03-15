@@ -26,7 +26,6 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/Save";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import EditIcon from "@mui/icons-material/Edit";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import SearchIcon from "@mui/icons-material/Search";
@@ -222,6 +221,7 @@ const getRoundedBoxes = (quantity, coverageArea) => {
 };
 
 const normalizeQuoteNo = (val) => String(val || "").trim().toUpperCase();
+const isItemReadyForBilling = (item) => Boolean(item?.productId) && Number(item?.quantity) > 0;
 
 const resolveProductForItem = (item, products) => {
   if (!item || !Array.isArray(products) || products.length === 0) return null;
@@ -248,7 +248,6 @@ const CustomerBill = () => {
   const [extraDiscount, setExtraDiscount] = useState("");
   const [loadingCharge, setLoadingCharge] = useState("");
   const [transportCharge, setTransportCharge] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("CASH");
   const [paymentType, setPaymentType] = useState("Full Payment");
   const [partialAmount, setPartialAmount] = useState("");
   const [loading, setLoading] = useState(false);
@@ -344,7 +343,6 @@ const CustomerBill = () => {
     setExtraDiscount(editInvoice?.charges?.extraDiscount!==undefined&&Number(editInvoice.charges.extraDiscount)!==0?String(editInvoice.charges.extraDiscount):"");
     setLoadingCharge(editInvoice?.charges?.loading!==undefined&&Number(editInvoice.charges.loading)!==0?String(editInvoice.charges.loading):"");
     setTransportCharge(editInvoice?.charges?.transport!==undefined&&Number(editInvoice.charges.transport)!==0?String(editInvoice.charges.transport):"");
-    setPaymentMethod(editInvoice?.payment?.method||"CASH");
     setPaymentType(editInvoice?.payment?.paymentType||"Full Payment");
     setPartialAmount(editInvoice?.payment?.paidAmount!==undefined?String(editInvoice.payment.paidAmount||""):"");
   }, [location.state, products]);
@@ -418,7 +416,6 @@ const CustomerBill = () => {
     );
     setLoadingCharge(quotation?.charges?.loading !== undefined ? String(quotation.charges.loading || "") : "");
     setTransportCharge(quotation?.charges?.transport !== undefined ? String(quotation.charges.transport || "") : "");
-    setPaymentMethod("CASH");
     setPaymentType("Full Payment");
     setPartialAmount("");
     setQuotationApplied(quotation);
@@ -446,7 +443,7 @@ const CustomerBill = () => {
 
   useEffect(() => {
     const details = selectedCustomer?.dealerDetails||{};
-    if (selectedCustomer?.name) setCustomerSearch(selectedCustomer.name);
+    setCustomerSearch(selectedCustomer?.name || "");
     setBillMeta((prev) => ({
       ...prev,
       saleType: getCustomerSaleType(selectedCustomer),
@@ -558,7 +555,7 @@ const CustomerBill = () => {
     if (field==="search") row.name=value;
     const coveragePerBox = Number(row.coverageArea||0);
     if (field==="quantity") {
-      if (isTransientNumberInput(value)) { row.boxes=""; if (field!=="confirmed") row.confirmed=false; setRow(index,row); return; }
+      if (isTransientNumberInput(value)) { row.boxes=""; setRow(index,row); return; }
       const qty = Number(value)||0;
       row.boxes = getRoundedBoxes(qty, coveragePerBox);
     }
@@ -575,21 +572,10 @@ const CustomerBill = () => {
         }
       }
     }
-    if (field!=="confirmed") row.confirmed=false;
     setRow(index, row);
   };
 
-  const toggleConfirm = (index) => {
-    const row = items[index];
-    if (!row.confirmed) {
-      if (!row.name||Number(row.quantity)<=0) { toast.error("Select product and enter valid quantity before confirm"); return; }
-      setItems((prev) => prev.map((it,i)=>i===index?{...it,confirmed:true}:it));
-      return;
-    }
-    setItems((prev) => prev.map((it,i)=>i===index?{...it,confirmed:false}:it));
-  };
-
-  const confirmedItems = useMemo(() => items.filter((item)=>item.confirmed), [items]);
+  const confirmedItems = useMemo(() => items.filter((item)=>isItemReadyForBilling(item)), [items]);
   const totalItemsCount = useMemo(() => confirmedItems.reduce((sum,item)=>sum+(Number(item.quantity)||0),0),[confirmedItems]);
   const itemDiscountAmount = useMemo(() => confirmedItems.reduce((sum,item)=>sum+Number(item.discountAmount||0),0),[confirmedItems]);
   const customerTypeDiscountPct = useMemo(() => getCustomerTypeDiscountPct(selectedCustomer,billMeta.saleType),[selectedCustomer,billMeta.saleType]);
@@ -645,7 +631,7 @@ const CustomerBill = () => {
 
   const validateBeforeSave = () => {
     if (!selectedCustomer?.name) { toast.error("Select customer"); return false; }
-    if (confirmedItems.length===0) { toast.error("Confirm at least one item"); return false; }
+    if (confirmedItems.length===0) { toast.error("Add at least one item with quantity"); return false; }
     if (paymentType==="Partial"&&(Number(partialAmount)<=0||Number(partialAmount)>=totals.finalAmount)) {
       toast.error("Advance amount should be greater than 0 and less than total"); return false;
     }
@@ -656,10 +642,17 @@ const CustomerBill = () => {
     if (!validateBeforeSave()) return;
     const customerBusinessDetails = selectedCustomer?.dealerDetails||{};
     const basePayment = editInvoice?.payment || {};
-    const paidAmount = Number(basePayment.paidAmount ?? (paymentType === "Partial" ? partialAmount : 0) ?? 0);
+    const initialPaidAmount = isEditMode
+      ? Number(basePayment.paidAmount ?? (paymentType === "Partial" ? partialAmount : 0) ?? 0)
+      : Math.max(0, Math.min(Number(partialAmount) || 0, totals.finalAmount));
+    const paidAmount = initialPaidAmount;
     const dueAmount = Math.max(0, totals.finalAmount - paidAmount);
-    const computedStatus = dueAmount <= 0 ? "Paid" : paidAmount > 0 ? "Partial" : "Pending";
-    const computedPaymentType = dueAmount <= 0 ? "Full Payment" : paidAmount > 0 ? "Partial" : "Pending";
+    const computedStatus = isEditMode
+      ? (dueAmount <= 0 ? "Paid" : paidAmount > 0 ? "Partial" : "Pending")
+      : (paidAmount > 0 ? "Partial" : "Pending");
+    const computedPaymentType = isEditMode
+      ? (dueAmount <= 0 ? "Full Payment" : paidAmount > 0 ? "Partial" : "Pending")
+      : (paidAmount > 0 ? "Partial" : "Pending");
     const invoiceNo = isEditMode ? (editInvoice?.invoiceNo || generateInvoiceNo()) : generateInvoiceNo();
     const payload = {
       customer: {
@@ -703,13 +696,13 @@ const CustomerBill = () => {
       }:undefined,
       payment:{
         ...basePayment,
-        method: paymentMethod || basePayment.method || "CASH",
+        method: basePayment.method || "",
         amount: totals.finalAmount,
         paidAmount,
         dueAmount,
         paymentType: computedPaymentType,
       },
-      reduceStockNow:false, status: computedStatus, invoiceNo,
+      reduceStockNow:true, status: computedStatus, invoiceNo,
       date:new Date(`${billMeta.date}T${new Date().toTimeString().slice(0,8)}`).toLocaleString(),
     };
     setLoading(true);
@@ -744,7 +737,7 @@ const CustomerBill = () => {
     setItems([createEmptyItem(savedSettings.defaultTax)]);
     setExtraGst(savedSettings.defaultTax===0?"":String(savedSettings.defaultTax));
     setExtraDiscount(savedSettings.defaultDiscount===0?"":String(savedSettings.defaultDiscount));
-    setLoadingCharge(""); setTransportCharge(""); setPaymentMethod("CASH"); setPaymentType("Full Payment");
+    setLoadingCharge(""); setTransportCharge(""); setPaymentType("Full Payment");
     setPartialAmount(""); setPayingAmountError("");
     setBillMeta({
       date:new Date().toISOString().slice(0,10), salesPerson:user?.name||salesPersonOptions[0],
@@ -804,13 +797,6 @@ const CustomerBill = () => {
   return (
     <>
     <Box sx={{ py:{ xs:1.5, md:2 }, background:pageBg, minHeight:"100%" }}>
-      <Box sx={{ mb:2.4, px:{ xs:0.6, md:0.8 } }}>
-        <Typography sx={{ fontSize:{ xs:24, md:30 }, fontWeight:800, color:"#0f172a", lineHeight:1.1 }}>
-          {isBusinessSale?"New Business Bill":"New Retail Bill"}
-        </Typography>
-        <Typography sx={{ mt:0.55, fontSize:12.5, color:"#64748b" }}>{topDateLabel}</Typography>
-      </Box>
-
       <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr", lg:"minmax(0, 2fr) minmax(320px, 0.95fr)" }, gap:2.2, alignItems:"start" }}>
         <Box sx={{ display:"contents" }}>
 
@@ -879,14 +865,6 @@ const CustomerBill = () => {
                   />
                 )}
               />
-              <Tooltip title={billMeta.saleType==="Retail Customer"?"Quick add retail customer":"Go to Create Customer for business accounts"}>
-                <Button size="small" variant="outlined"
-                    startIcon={<PersonAddAlt1Icon sx={{ fontSize:14 }} />}
-                    onClick={()=>{ if(billMeta.saleType==="Retail Customer"){ setAddCustomerOpen(true); } else { navigate("/customers/create"); } }}
-                    sx={{ borderRadius: 0, textTransform:"none", fontSize:12, fontWeight:600, px:1.4, py:0.5, borderColor:"#c6d9f0", color:primary, whiteSpace:"nowrap", "&:hover":{ background:"#edf4ff", borderColor:primary } }}>
-                    Add Customer
-                  </Button>
-                </Tooltip>
                 <Box
                   sx={{
                     minWidth: 132,
@@ -921,14 +899,6 @@ const CustomerBill = () => {
                   <TextField fullWidth size="small" type="date" value={billMeta.date} onChange={(e)=>setBillMeta((prev)=>({...prev,date:e.target.value}))} sx={inputSx} InputLabelProps={{ shrink:true }} />
                 </Box>
                 <Box>
-                  <Typography sx={fieldLabelSx}>Payment Type</Typography>
-                  <TextField select fullWidth size="small" value={paymentMethod} onChange={(e)=>setPaymentMethod(e.target.value)} sx={inputSx}>
-                    {["Cash","Credit (Udhari)","UPI / GPay","PhonePe","Cheque","NEFT/RTGS"].map((option)=>(
-                      <MenuItem key={option} value={option==="Cash"?"CASH":option}>{option}</MenuItem>
-                    ))}
-                  </TextField>
-                </Box>
-                <Box>
                   <Typography sx={fieldLabelSx}>Sales Person</Typography>
                   <TextField select fullWidth size="small" value={billMeta.salesPerson} onChange={(e)=>setBillMeta((prev)=>({...prev,salesPerson:e.target.value}))} sx={inputSx}>
                     {[...new Set([billMeta.salesPerson,`${user?.name||"Murugan"} (Owner)`,...salesPersonOptions])].filter(Boolean).map((option)=>(
@@ -944,13 +914,63 @@ const CustomerBill = () => {
               <Box sx={{ display:"grid", gridTemplateColumns:{ xs:"1fr", md:"repeat(4, 1fr)" }, gap:1.5, mb:1.5 }}>
                 <Box>
                   <Typography sx={fieldLabelSx}>Customer Name *</Typography>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={selectedCustomer?.name || ""}
-                    sx={inputSx}
-                    InputProps={{ readOnly: true }}
-                  />
+                  <Box sx={{ display:"flex", alignItems:"stretch", gap:1 }}>
+                    <Autocomplete
+                      fullWidth
+                      options={customerOptions}
+                      value={selectedCustomer}
+                      inputValue={customerSearch}
+                      onInputChange={(_, value) => setCustomerSearch(value)}
+                      onChange={(_, value) => setSelectedCustomer(value || null)}
+                      getOptionLabel={(option) => option?.name || ""}
+                      isOptionEqualToValue={(option, value) => String(option?._id || "") === String(value?._id || "")}
+                      filterOptions={(options, { inputValue }) => {
+                        const q = inputValue.toLowerCase().trim();
+                        if (!q) return options;
+                        return options.filter((o) =>
+                          (o.name || "").toLowerCase().includes(q) ||
+                          (o.phone || "").includes(q) ||
+                          (o.alternateMobile || "").includes(q)
+                        );
+                      }}
+                      renderOption={(props, option) => (
+                        <Box component="li" {...props} sx={{ display:"flex", flexDirection:"column", alignItems:"flex-start", py:1 }}>
+                          <Typography sx={{ fontSize:13, fontWeight:700, color:"#0f172a", lineHeight:1.2 }}>
+                            {option?.name || "-"}
+                          </Typography>
+                          <Typography sx={{ fontSize:11.5, color:"#64748b", lineHeight:1.3 }}>
+                            {[option?.phone, option?.alternateMobile].filter(Boolean).join(" / ") || "No phone"}
+                          </Typography>
+                        </Box>
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          fullWidth
+                          size="small"
+                          placeholder="Search by customer name or phone"
+                          sx={inputSx}
+                        />
+                      )}
+                    />
+                    <Tooltip title={billMeta.saleType==="Retail Customer"?"Quick add retail customer":"Go to Create Customer for business accounts"}>
+                      <IconButton
+                        onClick={()=>{ if(billMeta.saleType==="Retail Customer"){ setAddCustomerOpen(true); } else { navigate("/customers/create"); } }}
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          border: "1px solid #c6d9f0",
+                          borderRadius: 0,
+                          color: primary,
+                          background: "#fff",
+                          flexShrink: 0,
+                          "&:hover": { background:"#edf4ff", borderColor:primary }
+                        }}
+                      >
+                        <PersonAddAlt1Icon sx={{ fontSize:18 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
                 </Box>
                 <Box>
                   <Typography sx={fieldLabelSx}>Mobile</Typography>
@@ -1090,7 +1110,7 @@ const CustomerBill = () => {
                         { label:"Tile / Product", w:"16%" },{ label:"Category", w:"7%" },{ label:"Brand", w:"6%" },
                         { label:"Finish", w:"6%" },{ label:"Color/Design", w:"7%" },{ label:"Size", w:"5%" },
                         { label:"Qty(sqft)", w:"8%" },{ label:"Boxes", w:"6%" },{ label:"Rate/sqft", w:"6%" },
-                        { label:"GST%", w:"5%" },{ label:"Disc%", w:"6%" },{ label:"Amount(Rs)", w:"6%" },{ label:"", w:"6%" },
+                        { label:"GST%", w:"5%" },{ label:"Disc%", w:"6%" },{ label:"Amount(Rs)", w:"8%" },{ label:"", w:"4%" },
                       ].map(({ label, w })=>(
                         <TableCell key={label} sx={{ color:"#fff", fontWeight:700, py:1.4, px:1, whiteSpace:"nowrap", fontSize:12, width:w, borderRight:"1px solid rgba(255,255,255,0.18)", "&:last-child":{ borderRight:"none" } }}>{label}</TableCell>
                       ))}
@@ -1127,9 +1147,6 @@ const CustomerBill = () => {
                           <TableCell sx={{ whiteSpace:"nowrap", textAlign:"center", py:0.5, px:0.5 }}>
                             <IconButton size="small" onClick={()=>handleSearchSelect(products.find(p=>p._id===item.productId)||null)} title="Re-select product" sx={{ color:"#1a56a0", "&:hover":{ background:"#edf4ff" } }}>
                               <EditIcon sx={{ fontSize:15 }} />
-                            </IconButton>
-                            <IconButton size="small" onClick={()=>toggleConfirm(index)} sx={{ color:item.confirmed?"#15803d":"#64748b" }}>
-                              <CheckCircleIcon fontSize="small" />
                             </IconButton>
                             <IconButton size="small" onClick={()=>removeItem(index)} sx={{ color:"#c0392b" }}>
                               <DeleteIcon fontSize="small" />
@@ -1225,7 +1242,7 @@ const CustomerBill = () => {
                 {loading ? (isEditMode ? "Saving..." : "Moving...") : (isEditMode ? "Save Bill" : "Move to Payment")}
               </Button>
               <Box sx={{ display:"flex", gap:1, flexWrap:"wrap", mt:1.5 }}>
-                <Chip label={`${confirmedItems.length} items confirmed`} size="small" sx={{ background:"#eefaf2", color:"#1a7a4a" }} />
+                <Chip label={`${confirmedItems.length} items ready`} size="small" sx={{ background:"#eefaf2", color:"#1a7a4a" }} />
                 <Chip label={`${fmt(totalItemsCount)} qty`} size="small" sx={{ background:"#fff4eb", color:"#d4820a" }} />
                 <Chip label={paymentSummary.status} size="small" sx={statusColor[paymentSummary.status]} />
               </Box>

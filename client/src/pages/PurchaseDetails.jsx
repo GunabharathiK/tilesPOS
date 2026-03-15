@@ -368,8 +368,6 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
   const [importing,     setImporting]     = useState(false);
   const [expandedRows,  setExpandedRows]  = useState({});
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
-  const [pageSize,      setPageSize]      = useState(10);
-  const [page,          setPage]          = useState(1);
   const [sortCol,       setSortCol]       = useState("");
   const [sortDir,       setSortDir]       = useState("asc");
   const [activeCols,    setActiveCols]    = useState(["name","mobile","email","city","gstin","totalValue","totalDue","paymentTerms","status"]);
@@ -449,13 +447,9 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
     return list;
   }, [suppliers, search, stateFilter, balFilter, productFilter, paymentTab, sortCol, sortDir]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const paged      = filtered.slice((page - 1) * pageSize, page * pageSize);
-
   const handleSort = (col) => {
     if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
     else { setSortCol(col); setSortDir("asc"); }
-    setPage(1);
   };
 
   /* ── Import ── */
@@ -542,18 +536,6 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
     navigate("/suppliers/create", { state: { editSupplier: supplier } });
   };
 
-  const handleEditSupplierProduct = (supplier) => {
-    const supplierId = supplier?._id;
-    const latestPurchase = purchases
-      .filter((p) => String(p?.supplierId?._id || p?.supplierId || "") === String(supplierId || ""))
-      .sort((a, b) => new Date(b?.createdAt || b?.invoiceDate || 0) - new Date(a?.createdAt || a?.invoiceDate || 0))[0];
-    if (!latestPurchase?._id && !latestPurchase?.id) {
-      toast.error("No existing purchase found for this supplier to edit.");
-      return;
-    }
-    navigate("/suppliers/products", { state: { supplierId, supplier, editPurchase: latestPurchase } });
-  };
-
   const handleEditPurchase = (purchase) => {
     setViewSupplier(null);
     const purchaseSupplier = suppliers.find((s) => s._id === (purchase.supplierId?._id || purchase.supplierId));
@@ -606,29 +588,13 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
     outline: "none", appearance: "auto", fontFamily: "inherit",
   };
 
+  /* ── Row height constant for 10-row max ── */
+  const ROW_H = 43; // px — approximate height of each data row
+  const MAX_VISIBLE_ROWS = 10;
+
   /* ════════════════════════ RENDER ════════════════ */
   return (
     <Box sx={{ background: embedded ? "transparent" : T.bg, minHeight: embedded ? "auto" : "100%", fontFamily: "'Noto Sans', sans-serif" }}>
-      {!embedded && (
-        <>
-
-          {/* ── Page title bar ── */}
-          <Box sx={{ px: 3, py: 1.6, background: T.white, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <Box>
-              <Typography sx={{ fontSize: 20, fontWeight: 700, color: T.dark, lineHeight: 1.2 }}>
-                Suppliers List
-              </Typography>
-              <Typography sx={{ fontSize: 12, color: T.muted }}>View/Search Suppliers</Typography>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, fontSize: 12, color: T.muted }}>
-              <span>🏠 Home</span>
-              <span style={{ margin: "0 4px" }}>›</span>
-              <span style={{ color: T.primary, fontWeight: 600 }}>Suppliers List</span>
-            </Box>
-          </Box>
-        </>
-      )}
-
       <Box sx={{ p: embedded ? 0 : 2.5 }}>
         <Box sx={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: "6px", boxShadow: "0 1px 4px rgba(0,0,0,.06)", overflow: "visible" }}>
 
@@ -651,19 +617,18 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
 
           <Box sx={{ p: 2 }}>
 
-            {/* ── Toolbar: Show + Export buttons + Filters + Search ── */}
+            {/* ── Toolbar ── */}
             <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 1.5, mb: 1.8 }}>
 
-              {/* Left: show entries */}
+              {/* Left: entry count */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13, color: T.text }}>
-                <span>Show</span>
-                <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} style={selStyle}>
-                  {[5,10,25,50,100].map((n) => <option key={n} value={n}>{n}</option>)}
-                </select>
-                <span>entries</span>
+                <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>All Suppliers</Typography>
+                <Box sx={{ px: 1.2, py: "2px", background: T.primaryLight, border: `1px solid #bfd6f6`, fontSize: 11, fontWeight: 700, color: T.primary, borderRadius: "3px" }}>
+                  {filtered.length}
+                </Box>
               </Box>
 
-              {/* Right: export buttons + filters + search */}
+              {/* Right: export + filters + search */}
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap", position: "relative" }}>
 
                 {/* Export toolbar buttons */}
@@ -696,13 +661,13 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
                 )}
 
                 {/* Filter selects */}
-                <select value={stateFilter} onChange={(e) => { setStateFilter(e.target.value); setPage(1); }} style={{ ...selStyle, marginLeft: 6 }}>
+                <select value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} style={{ ...selStyle, marginLeft: 6 }}>
                   {["All States","Tamil Nadu","Karnataka","Gujarat","Andhra Pradesh","Kerala","Maharashtra"].map((o) => <option key={o}>{o}</option>)}
                 </select>
-                <select value={balFilter} onChange={(e) => { setBalFilter(e.target.value); setPage(1); }} style={selStyle}>
+                <select value={balFilter} onChange={(e) => setBalFilter(e.target.value)} style={selStyle}>
                   {["All Balance","Has Payable","Cleared"].map((o) => <option key={o}>{o}</option>)}
                 </select>
-                <select value={productFilter} onChange={(e) => { setProductFilter(e.target.value); setPage(1); }} style={selStyle}>
+                <select value={productFilter} onChange={(e) => setProductFilter(e.target.value)} style={selStyle}>
                   {productOptions.map((o) => <option key={o}>{o}</option>)}
                 </select>
 
@@ -711,7 +676,7 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
                   <span style={{ fontWeight: 500 }}>Search:</span>
                   <input
                     value={search}
-                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                    onChange={(e) => setSearch(e.target.value)}
                     style={{ padding: "5px 9px", border: `1px solid ${T.border}`, borderRadius: "4px", fontSize: 13, color: T.text, background: T.white, outline: "none", width: 180, fontFamily: "inherit" }}
                     onFocus={(e) => e.target.style.borderColor = T.primary}
                     onBlur={(e) => e.target.style.borderColor = T.border}
@@ -723,7 +688,7 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
             {/* ── Payment tabs ── */}
             <Box sx={{ display: "flex", gap: 0.6, mb: 1.5 }}>
               {["All","Pending","Paid"].map((tab) => (
-                <Box key={tab} onClick={() => { setPaymentTab(tab); setPage(1); }}
+                <Box key={tab} onClick={() => setPaymentTab(tab)}
                   sx={{ px: 1.6, py: "5px", borderRadius: "3px", cursor: "pointer", fontSize: 12, fontWeight: 700, userSelect: "none",
                     background: paymentTab === tab ? T.tableHead : T.bg,
                     color:      paymentTab === tab ? "#fff"       : T.muted,
@@ -736,19 +701,15 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
             </Box>
 
             {/* ── Table ── */}
-            <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "4px", overflowX: "visible" }}>
+            <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "4px", overflow: "hidden" }}>
+
+              {/* Sticky header — outside scroll container */}
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: T.tableHead }}>
-                    {/* Expand toggle col */}
                     <th style={{ width: 40, padding: "10px 10px", textAlign: "center", borderRight: "1px solid rgba(255,255,255,.15)", color: "#fff" }}>#</th>
-                    {/* Checkbox */}
                     <th style={{ width: 36, padding: "10px 8px", textAlign: "center", borderRight: "1px solid rgba(255,255,255,.15)" }}>
-                      <input type="checkbox" style={{ cursor: "pointer", accentColor: "#fff" }}
-                        onChange={(e) => {
-                          /* select all on page — for UI completeness */
-                        }}
-                      />
+                      <input type="checkbox" style={{ cursor: "pointer", accentColor: "#fff" }} onChange={() => {}} />
                     </th>
                     {displayCols.map((col) => (
                       <th key={col.key} onClick={() => handleSort(col.key)}
@@ -758,171 +719,166 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {paged.length === 0 ? (
-                    <tr>
-                      <td colSpan={displayCols.length + 2} style={{ padding: "28px", textAlign: "center", color: T.muted, fontSize: 13 }}>
-                        {search ? "No matching records found" : "No suppliers yet. Click + New Supplier to begin."}
-                      </td>
-                    </tr>
-                  ) : paged.map((supplier, idx) => {
-                    const rowBg      = idx % 2 === 0 ? T.white : T.stripe;
-                    const isExpanded = Boolean(expandedRows[supplier._id]);
-                    const invoices   = purchases
-                      .filter((p) => String(p.supplierId?._id || p.supplierId || "") === String(supplier._id))
-                      .filter((p) => !p.isDraft)
-                      .sort((a, b) => new Date(b.createdAt || b.invoiceDate || 0) - new Date(a.createdAt || a.invoiceDate || 0));
+              </table>
 
-                    const getCellValue = (col) => {
-                      switch (col.key) {
-                        case "name":         return supplier.companyName || supplier.name || "—";
-                        case "mobile":       return supplier.companyPhone || supplier.phone || "—";
-                        case "email":        return supplier.companyEmail || "—";
-                        case "city":         return supplier.city || "—";
-                        case "gstin":        return supplier.gstin || "—";
-                        case "totalValue":   return Number(supplier.totalValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
-                        case "totalDue":     return Number(supplier.totalDue   || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
-                        case "paymentTerms": return supplier.paymentTerms || "—";
-                        case "status":       return supplier.paymentStatus || "Pending";
-                        default:             return "—";
-                      }
-                    };
+              {/* Scrollable body — ~10 rows before scroll */}
+              <Box
+                sx={{
+                  overflowY: "auto",
+                  maxHeight: `${ROW_H * MAX_VISIBLE_ROWS}px`,
+                  "&::-webkit-scrollbar": { width: 6 },
+                  "&::-webkit-scrollbar-track": { background: T.stripe },
+                  "&::-webkit-scrollbar-thumb": { background: T.border, borderRadius: 3 },
+                  "&::-webkit-scrollbar-thumb:hover": { background: T.muted },
+                }}
+              >
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700, fontSize: 13 }}>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={displayCols.length + 2} style={{ padding: "28px", textAlign: "center", color: T.muted, fontSize: 13 }}>
+                          {search ? "No matching records found" : "No suppliers yet. Click + New Supplier to begin."}
+                        </td>
+                      </tr>
+                    ) : filtered.map((supplier, idx) => {
+                      const rowBg      = idx % 2 === 0 ? T.white : T.stripe;
+                      const isExpanded = Boolean(expandedRows[supplier._id]);
+                      const invoices   = purchases
+                        .filter((p) => String(p.supplierId?._id || p.supplierId || "") === String(supplier._id))
+                        .filter((p) => !p.isDraft)
+                        .sort((a, b) => new Date(b.createdAt || b.invoiceDate || 0) - new Date(a.createdAt || a.invoiceDate || 0));
 
-                    return (
-                      <>
-                        <tr key={supplier._id}
-                          style={{ borderBottom: `1px solid ${T.border}`, background: rowBg }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = T.rowHover}
-                          onMouseLeave={(e) => e.currentTarget.style.background = rowBg}
-                        >
-                          {/* Expand toggle */}
-                          <td style={{ padding: "10px", textAlign: "center", borderRight: `1px solid ${T.border}` }}>
-                            <Box onClick={() => toggleExpand(supplier._id)}
-                              sx={{ width: 22, height: 22, borderRadius: "3px", background: T.primary, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12, fontWeight: 700, userSelect: "none" }}>
-                              {isExpanded ? "−" : "+"}
-                            </Box>
-                          </td>
+                      const getCellValue = (col) => {
+                        switch (col.key) {
+                          case "name":         return supplier.companyName || supplier.name || "—";
+                          case "mobile":       return supplier.companyPhone || supplier.phone || "—";
+                          case "email":        return supplier.companyEmail || "—";
+                          case "city":         return supplier.city || "—";
+                          case "gstin":        return supplier.gstin || "—";
+                          case "totalValue":   return Number(supplier.totalValue || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+                          case "totalDue":     return Number(supplier.totalDue   || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 });
+                          case "paymentTerms": return supplier.paymentTerms || "—";
+                          case "status":       return supplier.paymentStatus || "Pending";
+                          default:             return "—";
+                        }
+                      };
 
-                          {/* Checkbox */}
-                          <td style={{ padding: "10px 8px", textAlign: "center", borderRight: `1px solid ${T.border}` }}>
-                            <input type="checkbox" style={{ cursor: "pointer", accentColor: T.primary }} />
-                          </td>
-
-                          {/* Data cells */}
-                          {displayCols.map((col) => {
-                            const raw = getCellValue(col);
-                            let content;
-
-                            if (col.key === "status") {
-                              const isActive = String(raw).toLowerCase() !== "pending" && String(raw).toLowerCase() !== "inactive";
-                              content = (
-                                <Box sx={{ display: "inline-block", px: 1.1, py: "3px", borderRadius: "3px", fontSize: 11.5, fontWeight: 700, background: isActive ? T.success : T.muted, color: "#fff" }}>
-                                  {isActive ? "Active" : raw}
-                                </Box>
-                              );
-                            } else if (col.key === "totalValue") {
-                              content = <span style={{ fontWeight: 600, color: T.dark }}>{raw}</span>;
-                            } else if (col.key === "totalDue") {
-                              const val = Number(supplier.totalDue || 0);
-                              content = <span style={{ fontWeight: 700, color: val > 0 ? T.danger : T.muted }}>{raw}</span>;
-                            } else {
-                              content = <span style={{ color: T.text }}>{raw}</span>;
-                            }
-
-                            return (
-                              <td key={col.key} style={{ padding: "10px 12px", borderRight: `1px solid ${T.border}`, verticalAlign: "middle" }}>
-                                {content}
-                              </td>
-                            );
-                          })}
-
-                        </tr>
-
-                        {/* ── Expanded invoice rows ── */}
-                        {isExpanded && (
-                          <tr key={`${supplier._id}-expand`}>
-                            <td colSpan={displayCols.length + 2} style={{ padding: "0 16px 16px 40px", background: "#f0f7fd", borderBottom: `1px solid ${T.border}` }}>
-                              <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "5px", overflow: "hidden", mt: 1 }}>
-                                {/* Invoice sub-header */}
-                                <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1.1fr 1fr 1fr 0.9fr 1.4fr", px: 2, py: 1.2, background: "#eef4fb", borderBottom: `1px solid ${T.border}` }}>
-                                  {["Invoice No","Date","Total","Paid","Due","Status","Actions"].map((h) => (
-                                    <Typography key={h} sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</Typography>
-                                  ))}
-                                </Box>
-                                {invoices.length === 0 ? (
-                                  <Box sx={{ px: 2, py: 2, background: T.white }}>
-                                    <Typography sx={{ fontSize: 13, color: T.muted }}>No invoices for this supplier.</Typography>
-                                  </Box>
-                                ) : invoices.map((p) => {
-                                  const statusLabel = Number(p.totalDue || 0) <= 0 ? "Paid" : Number(p.totalPaid || 0) > 0 ? "Partial" : "Pending";
-                                  const badge = statusLabel === "Paid"
-                                    ? { bg: T.successLight, color: T.success }
-                                    : statusLabel === "Partial"
-                                      ? { bg: T.warningLight, color: T.warning }
-                                      : { bg: T.dangerLight, color: T.danger };
-                                  return (
-                                    <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1.1fr 1fr 1fr 0.9fr 1.4fr", px: 2, py: 1.2, borderBottom: `1px solid ${T.border}`, background: T.white, "&:last-child": { borderBottom: "none" }, alignItems: "center" }}>
-                                      <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{p.invoiceNo || p.grnNo || "—"}</Typography>
-                                      <Typography sx={{ fontSize: 13, color: T.text }}>{fmtDate(p.createdAt || p.invoiceDate)}</Typography>
-                                      <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{fmt(p.grandTotal || p.totalInvoiceAmount || 0)}</Typography>
-                                      <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.success }}>{fmt(p.totalPaid || 0)}</Typography>
-                                      <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.danger }}>{fmt(p.totalDue || 0)}</Typography>
-                                      <Box sx={{ display: "inline-flex", alignItems: "center", px: 1, py: "3px", borderRadius: "3px", background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700 }}>
-                                        {statusLabel}
-                                      </Box>
-                                      <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }}>
-                                        <Typography onClick={() => setViewSupplier(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: T.primary, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>View</Typography>
-                                        <Typography onClick={() => handleEditPurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Edit</Typography>
-                                        <Typography onClick={() => handlePay(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: "#0284c7", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Pay</Typography>
-                                        <Typography onClick={() => handleDeletePurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: T.danger, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Delete</Typography>
-                                      </Box>
-                                    </Box>
-                                  );
-                                })}
+                      return (
+                        <>
+                          {/* ── Main supplier row — click anywhere to expand ── */}
+                          <tr
+                            key={supplier._id}
+                            onClick={() => toggleExpand(supplier._id)}
+                            style={{
+                              borderBottom: `1px solid ${T.border}`,
+                              background: isExpanded ? T.primaryLight : rowBg,
+                              cursor: "pointer",
+                              transition: "background .1s",
+                            }}
+                            onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.background = T.rowHover; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = isExpanded ? T.primaryLight : rowBg; }}
+                          >
+                            {/* Expand indicator (decorative, pointer-events: none) */}
+                            <td style={{ width: 40, padding: "10px 10px", textAlign: "center", borderRight: `1px solid ${T.border}` }}>
+                              <Box sx={{ width: 22, height: 22, borderRadius: "3px", background: isExpanded ? T.primary : "#e0eaf4", color: isExpanded ? "#fff" : T.primary, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, userSelect: "none", pointerEvents: "none" }}>
+                                {isExpanded ? "−" : "+"}
                               </Box>
                             </td>
+
+                            {/* Checkbox — stop propagation so it doesn't toggle expand */}
+                            <td style={{ padding: "10px 8px", textAlign: "center", borderRight: `1px solid ${T.border}` }} onClick={(e) => e.stopPropagation()}>
+                              <input type="checkbox" style={{ cursor: "pointer", accentColor: T.primary }} />
+                            </td>
+
+                            {/* Data cells */}
+                            {displayCols.map((col) => {
+                              const raw = getCellValue(col);
+                              let content;
+
+                              if (col.key === "status") {
+                                const isActive = String(raw).toLowerCase() !== "pending" && String(raw).toLowerCase() !== "inactive";
+                                content = (
+                                  <Box sx={{ display: "inline-block", px: 1.1, py: "3px", borderRadius: "3px", fontSize: 11.5, fontWeight: 700, background: isActive ? T.success : T.muted, color: "#fff" }}>
+                                    {isActive ? "Active" : raw}
+                                  </Box>
+                                );
+                              } else if (col.key === "totalValue") {
+                                content = <span style={{ fontWeight: 600, color: T.dark }}>{raw}</span>;
+                              } else if (col.key === "totalDue") {
+                                const val = Number(supplier.totalDue || 0);
+                                content = <span style={{ fontWeight: 700, color: val > 0 ? T.danger : T.muted }}>{raw}</span>;
+                              } else {
+                                content = <span style={{ color: T.text }}>{raw}</span>;
+                              }
+
+                              return (
+                                <td key={col.key} style={{ padding: "10px 12px", borderRight: `1px solid ${T.border}`, verticalAlign: "middle" }}>
+                                  {content}
+                                </td>
+                              );
+                            })}
                           </tr>
-                        )}
-                      </>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Box>
 
-            {/* ── Pagination footer ── */}
-            <Box sx={{ mt: 1.5, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
-              <Typography sx={{ fontSize: 13, color: T.muted }}>
-                Showing {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1} to{" "}
-                {Math.min(page * pageSize, filtered.length)} of {filtered.length} entries
-                {(search || stateFilter !== "All States" || balFilter !== "All Balance" || productFilter !== "All Categories") &&
-                  ` (filtered from ${suppliers.length} total)`}
-              </Typography>
+                          {/* ── Expanded invoice rows ── */}
+                          {isExpanded && (
+                            <tr key={`${supplier._id}-expand`}>
+                              <td colSpan={displayCols.length + 2} style={{ padding: "0 16px 16px 40px", background: "#f0f7fd", borderBottom: `1px solid ${T.border}` }}>
+                                <Box sx={{ border: `1px solid ${T.border}`, borderRadius: "5px", overflow: "hidden", mt: 1 }}>
+                                  <Box sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1.1fr 1fr 1fr 0.9fr 1.4fr", px: 2, py: 1.2, background: "#eef4fb", borderBottom: `1px solid ${T.border}` }}>
+                                    {["Invoice No","Date","Total","Paid","Due","Status","Actions"].map((h) => (
+                                      <Typography key={h} sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em" }}>{h}</Typography>
+                                    ))}
+                                  </Box>
+                                  {invoices.length === 0 ? (
+                                    <Box sx={{ px: 2, py: 2, background: T.white }}>
+                                      <Typography sx={{ fontSize: 13, color: T.muted }}>No invoices for this supplier.</Typography>
+                                    </Box>
+                                  ) : invoices.map((p) => {
+                                    const statusLabel = Number(p.totalDue || 0) <= 0 ? "Paid" : Number(p.totalPaid || 0) > 0 ? "Partial" : "Pending";
+                                    const badge = statusLabel === "Paid"
+                                      ? { bg: T.successLight, color: T.success }
+                                      : statusLabel === "Partial"
+                                        ? { bg: T.warningLight, color: T.warning }
+                                        : { bg: T.dangerLight, color: T.danger };
+                                    return (
+                                      <Box key={p._id} sx={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1.1fr 1fr 1fr 0.9fr 1.4fr", px: 2, py: 1.2, borderBottom: `1px solid ${T.border}`, background: T.white, "&:last-child": { borderBottom: "none" }, alignItems: "center" }}>
+                                        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.primary }}>{p.invoiceNo || p.grnNo || "—"}</Typography>
+                                        <Typography sx={{ fontSize: 13, color: T.text }}>{fmtDate(p.createdAt || p.invoiceDate)}</Typography>
+                                        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{fmt(p.grandTotal || p.totalInvoiceAmount || 0)}</Typography>
+                                        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.success }}>{fmt(p.totalPaid || 0)}</Typography>
+                                        <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.danger }}>{fmt(p.totalDue || 0)}</Typography>
+                                        <Box sx={{ display: "inline-flex", alignItems: "center", px: 1, py: "3px", borderRadius: "3px", background: badge.bg, color: badge.color, fontSize: 11, fontWeight: 700 }}>
+                                          {statusLabel}
+                                        </Box>
+                                        <Box sx={{ display: "flex", gap: 1.2, alignItems: "center" }} onClick={(e) => e.stopPropagation()}>
+                                          <Typography onClick={() => setViewSupplier(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: T.primary, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>View</Typography>
+                                          <Typography onClick={() => handleEditPurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Edit</Typography>
+                                          <Typography onClick={() => handlePay(supplier)} sx={{ fontSize: 12, fontWeight: 700, color: "#0284c7", cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Pay</Typography>
+                                          <Typography onClick={() => handleDeletePurchase(p)} sx={{ fontSize: 12, fontWeight: 700, color: T.danger, cursor: "pointer", "&:hover": { textDecoration: "underline" } }}>Delete</Typography>
+                                        </Box>
+                                      </Box>
+                                    );
+                                  })}
+                                </Box>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </Box>
 
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Box onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  sx={{ px: 1.2, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, cursor: page === 1 ? "default" : "pointer", color: page === 1 ? T.muted : T.text, background: page === 1 ? T.stripe : T.white, borderRadius: "3px", userSelect: "none", "&:hover": page > 1 ? { background: T.primaryLight, borderColor: T.primary, color: T.primary } : {}, transition: "all .12s" }}>
-                  Previous
-                </Box>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-                  .reduce((acc, n, i, arr) => { if (i > 0 && n - arr[i - 1] > 1) acc.push("..."); acc.push(n); return acc; }, [])
-                  .map((item, i) =>
-                    item === "..." ? (
-                      <Box key={`e${i}`} sx={{ px: 1, fontSize: 12, color: T.muted }}>...</Box>
-                    ) : (
-                      <Box key={item} onClick={() => setPage(item)}
-                        sx={{ px: 1.4, py: "5px", border: `1px solid ${item === page ? T.primary : T.border}`, fontSize: 12, cursor: "pointer", background: item === page ? T.primary : T.white, color: item === page ? "#fff" : T.text, fontWeight: item === page ? 700 : 400, borderRadius: "3px", userSelect: "none", "&:hover": item !== page ? { background: T.primaryLight, borderColor: T.primary, color: T.primary } : {}, transition: "all .12s" }}>
-                        {item}
-                      </Box>
-                    )
-                  )}
-
-                <Box onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  sx={{ px: 1.2, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, cursor: page === totalPages ? "default" : "pointer", color: page === totalPages ? T.muted : T.text, background: page === totalPages ? T.stripe : T.white, borderRadius: "3px", userSelect: "none", "&:hover": page < totalPages ? { background: T.primaryLight, borderColor: T.primary, color: T.primary } : {}, transition: "all .12s" }}>
-                  Next
-                </Box>
+              {/* Footer: entry count */}
+              <Box sx={{ px: 2, py: 1.2, borderTop: `1px solid ${T.border}`, background: T.stripe }}>
+                <Typography sx={{ fontSize: 13, color: T.muted }}>
+                  Showing all{" "}
+                  <Box component="span" sx={{ fontWeight: 700, color: T.dark }}>{filtered.length}</Box>{" "}
+                  {filtered.length === 1 ? "entry" : "entries"}
+                  {(search || stateFilter !== "All States" || balFilter !== "All Balance" || productFilter !== "All Categories") &&
+                    ` (filtered from ${suppliers.length} total)`}
+                </Typography>
               </Box>
             </Box>
 
@@ -959,4 +915,3 @@ const PurchaseDetails = ({ onEdit, onStatsChange, embedded = false }) => {
 };
 
 export default PurchaseDetails;
-

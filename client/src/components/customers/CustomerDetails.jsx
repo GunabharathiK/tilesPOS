@@ -17,8 +17,6 @@ import {
   Collapse,
   InputAdornment,
 } from "@mui/material";
-import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
-import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import CurrencyRupeeIcon from "@mui/icons-material/CurrencyRupee";
 import HourglassBottomIcon from "@mui/icons-material/HourglassBottom";
 import PeopleIcon from "@mui/icons-material/People";
@@ -178,7 +176,6 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm"
       PaperProps={{ sx: { borderRadius: 0, boxShadow: "0 24px 64px rgba(0,0,0,.14)" } }}>
 
-      {/* Dialog header */}
       <Box sx={{ px: 3, py: 2, borderBottom: `2px solid ${T.primary}`, background: `linear-gradient(to right, ${T.primaryLight}, ${T.surface})`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <Box>
           <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.dark, lineHeight: 1.15 }}>Update Payment</Typography>
@@ -188,7 +185,6 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
       </Box>
 
       <DialogContent sx={{ p: 2.5 }}>
-        {/* Summary strip */}
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", mb: 2.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
           {[
             { label: "Invoice",   value: invoice.invoiceNo || "—" },
@@ -249,7 +245,6 @@ const InvoiceViewDialog = ({ invoice, open, onClose }) => {
       </Box>
 
       <DialogContent sx={{ p: 2.5 }}>
-        {/* Meta grid */}
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", mb: 2.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
           {[
             { label: "Customer", value: invoice?.customer?.name || "—" },
@@ -268,7 +263,6 @@ const InvoiceViewDialog = ({ invoice, open, onClose }) => {
           ))}
         </Box>
 
-        {/* Items table */}
         <Box sx={{ border: `1px solid ${T.border}`, overflow: "hidden" }}>
           <Table size="small">
             <TableHead>
@@ -337,22 +331,24 @@ const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
   return (
     <>
       <TableRow
-        sx={{ background: rowBg, transition: "background .12s",
-          "&:hover": { background: open ? T.primaryLight : T.surfaceAlt } }}
+        onClick={() => setOpen((v) => !v)}
+        sx={{
+          background: rowBg, transition: "background .12s",
+          cursor: "pointer",
+          "&:hover": { background: open ? "#dbeafe" : T.surfaceAlt },
+        }}
       >
-        {/* Expand toggle */}
         <TableCell sx={{ width: 40, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
           <Box
-            onClick={() => setOpen((v) => !v)}
             sx={{
-              width: 24, height: 24, cursor: "pointer",
+              width: 24, height: 24,
               background: open ? T.primary : T.surfaceAlt,
               color: open ? "#fff" : T.muted,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13, fontWeight: 700, userSelect: "none",
               border: `1px solid ${open ? T.primary : T.border}`,
-              "&:hover": { background: open ? T.primaryDark : T.primaryLight, borderColor: T.primary, color: open ? "#fff" : T.primary },
               transition: "all .12s",
+              pointerEvents: "none", // row handles click
             }}>
             {open ? "−" : "+"}
           </Box>
@@ -367,7 +363,7 @@ const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
           ₹{formatCurrency(row.outstanding)}
         </TD>
         <TD>{row.paymentTerms || "—"}</TD>
-        <TableCell sx={{ py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+        <TableCell sx={{ py: 1, borderBottom: `1px solid ${T.borderLight}` }} onClick={(e) => e.stopPropagation()}>
           <ActBtn label="Delete" color={T.danger} hoverBg={T.dangerLight}
             onClick={() => onDelete(targetDeleteInvoice)} disabled={!targetDeleteInvoice} />
         </TableCell>
@@ -378,7 +374,6 @@ const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
         <TableCell colSpan={10} sx={{ py: 0, border: 0 }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ mx: 2, my: 1.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
-              {/* Sub-header */}
               <Box sx={{ px: 2, py: 1.1, background: T.primaryLight, borderBottom: `1px solid ${T.border}` }}>
                 <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: ".07em" }}>
                   Invoices ({row.invoices.length})
@@ -459,8 +454,6 @@ const CustomerDetails = () => {
   const [typeFilters,    setTypeFilters]    = useState({
     "Retail Customer": "all", Dealer: "all", Contractor: "all", "Builder / Project": "all",
   });
-  const [page,     setPage]     = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
   const fetchAll = async () => {
     try {
@@ -553,8 +546,6 @@ const CustomerDetails = () => {
 
   const activeSection = TYPE_SECTIONS.find((s) => s.key === activeTab) || TYPE_SECTIONS[0];
   const activeList    = sectionRows(activeTab);
-  const totalPages    = Math.max(1, Math.ceil(activeList.length / pageSize));
-  const pagedList     = activeList.slice((page - 1) * pageSize, page * pageSize);
 
   /* ════════════════════════ RENDER ════════════════ */
   return (
@@ -613,7 +604,7 @@ const CustomerDetails = () => {
               return (
                 <Box
                   key={section.key}
-                  onClick={() => { setActiveTab(section.key); setPage(1); }}
+                  onClick={() => { setActiveTab(section.key); }}
                   sx={{
                     flex: 1, minWidth: 120,
                     px: 2, py: 1.5,
@@ -639,7 +630,6 @@ const CustomerDetails = () => {
 
           {/* Toolbar: filter pills + search */}
           <Box sx={{ px: 2.5, py: 1.4, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.2, background: T.surfaceAlt }}>
-            {/* Filter pills */}
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <Box sx={{ width: 8, height: 8, background: activeSection.color, flexShrink: 0 }} />
               <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{activeSection.title}</Typography>
@@ -650,7 +640,7 @@ const CustomerDetails = () => {
               {[{ key: "all", label: "All" }, { key: "pending", label: "Pending" }, { key: "paid", label: "Paid" }].map((flt) => {
                 const isActive = typeFilters[activeTab] === flt.key;
                 return (
-                  <Box key={flt.key} onClick={() => { setTypeFilters((prev) => ({ ...prev, [activeTab]: flt.key })); setPage(1); }}
+                  <Box key={flt.key} onClick={() => setTypeFilters((prev) => ({ ...prev, [activeTab]: flt.key }))}
                     sx={{ px: 1.4, py: "4px", fontSize: 12, fontWeight: isActive ? 700 : 500, cursor: "pointer", userSelect: "none",
                       color: isActive ? activeSection.color : T.muted,
                       background: isActive ? activeSection.bg : "transparent",
@@ -669,15 +659,32 @@ const CustomerDetails = () => {
               <SearchIcon sx={{ fontSize: 16, color: T.faint, flexShrink: 0 }} />
               <input
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder={`Search ${activeSection.title}…`}
                 style={{ border: "none", outline: "none", fontSize: 13, color: T.text, background: "transparent", width: "100%", fontFamily: "inherit" }}
               />
             </Box>
           </Box>
 
-          {/* Table */}
-          <Box sx={{ overflowX: "auto" }}>
+          {/* Scrollable Table — shows ~10 rows, then scrolls */}
+          <Box
+            sx={{
+              overflowX: "auto",
+              overflowY: "auto",
+              maxHeight: "430px", /* ~10 rows × 43px each */
+              /* Sticky header support */
+              "& thead tr th": {
+                position: "sticky",
+                top: 0,
+                zIndex: 2,
+              },
+              /* Custom scrollbar */
+              "&::-webkit-scrollbar": { width: 6, height: 6 },
+              "&::-webkit-scrollbar-track": { background: T.surfaceAlt },
+              "&::-webkit-scrollbar-thumb": { background: T.border, borderRadius: 3 },
+              "&::-webkit-scrollbar-thumb:hover": { background: T.faint },
+            }}
+          >
             <Table size="small" sx={{ minWidth: 860 }}>
               <TableHead>
                 <TableRow>
@@ -694,11 +701,11 @@ const CustomerDetails = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {pagedList.map((row, idx) => (
+                {activeList.map((row, idx) => (
                   <CustomerRow
                     key={`${activeTab}-${row.key}`}
                     row={row}
-                    serial={(page - 1) * pageSize + idx + 1}
+                    serial={idx + 1}
                     onView={(inv) => setViewInvoice(inv)}
                     onEdit={(inv) => navigate("/customers/bill", {
                       state: {
@@ -723,43 +730,13 @@ const CustomerDetails = () => {
             </Table>
           </Box>
 
-          {/* ── Pagination footer ── */}
-          <Box sx={{ px: 2.5, py: 1.4, borderTop: `1px solid ${T.border}`, background: T.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13, color: T.muted }}>
-              <span>Show</span>
-              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                style={{ padding: "4px 8px", border: `1px solid ${T.border}`, fontSize: 13, color: T.text, background: T.surface, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
-                {[5, 10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <span>entries</span>
-              <Box sx={{ mx: 0.5, width: 1, height: 14, background: T.border }} />
-              <span>
-                {activeList.length === 0 ? "No entries" : `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, activeList.length)} of ${activeList.length}`}
-              </span>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-              <Box onClick={() => setPage((p) => Math.max(1, p - 1))}
-                sx={{ px: 1.3, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, cursor: page === 1 ? "default" : "pointer", color: page === 1 ? T.faint : T.text, background: page === 1 ? T.surfaceAlt : T.surface, userSelect: "none", "&:hover": page > 1 ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
-                Previous
-              </Box>
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
-                .reduce((acc, n, i, arr) => { if (i > 0 && n - arr[i - 1] > 1) acc.push("..."); acc.push(n); return acc; }, [])
-                .map((item, i) =>
-                  item === "..." ? (
-                    <Box key={`e${i}`} sx={{ px: 1, fontSize: 12, color: T.faint }}>...</Box>
-                  ) : (
-                    <Box key={item} onClick={() => setPage(item)}
-                      sx={{ px: 1.4, py: "5px", border: `1px solid ${item === page ? T.primary : T.border}`, fontSize: 12, fontWeight: item === page ? 700 : 400, cursor: "pointer", background: item === page ? T.primary : T.surface, color: item === page ? "#fff" : T.text, userSelect: "none", "&:hover": item !== page ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
-                      {item}
-                    </Box>
-                  )
-                )}
-              <Box onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                sx={{ px: 1.3, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, cursor: page === totalPages ? "default" : "pointer", color: page === totalPages ? T.faint : T.text, background: page === totalPages ? T.surfaceAlt : T.surface, userSelect: "none", "&:hover": page < totalPages ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
-                Next
-              </Box>
-            </Box>
+          {/* ── Footer: entry count ── */}
+          <Box sx={{ px: 2.5, py: 1.2, borderTop: `1px solid ${T.border}`, background: T.surfaceAlt, display: "flex", alignItems: "center" }}>
+            <Typography sx={{ fontSize: 12, color: T.muted }}>
+              {activeList.length === 0
+                ? "No entries"
+                : `Showing all ${activeList.length} ${activeList.length === 1 ? "entry" : "entries"}`}
+            </Typography>
           </Box>
 
         </Box>

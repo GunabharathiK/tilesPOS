@@ -28,6 +28,15 @@ const getPriceByCustomerType = (product, customerType) => {
   return retail;
 };
 
+const buildStockDelta = (item = {}, direction = -1) => {
+  const quantity = round2(Number(item?.quantity) || 0) * direction;
+  const boxes = round2(Number(item?.boxes) || 0) * direction;
+  const delta = {};
+  if (quantity !== 0) delta.stock = quantity;
+  if (boxes !== 0) delta.stockBoxes = boxes;
+  return delta;
+};
+
 const buildInvoicePayload = async (body = {}) => {
   if (typeof body.customer === "string") {
     body.customer = { name: body.customer };
@@ -152,10 +161,11 @@ exports.createInvoice = async (req, res) => {
     if (body.stockReduced) {
       for (const item of body.items || []) {
         if (item.productId) {
-          const qty = Number(item.quantity) || 0;
+          const delta = buildStockDelta(item, -1);
+          if (!Object.keys(delta).length) continue;
           await Product.findByIdAndUpdate(
             item.productId,
-            { $inc: { stock: -qty } },
+            { $inc: delta },
             { new: true }
           );
         }
@@ -182,8 +192,9 @@ exports.updateInvoice = async (req, res) => {
     if (existing.stockReduced !== false) {
       for (const item of existing.items || []) {
         if (item.productId) {
-          const qty = Number(item.quantity) || 0;
-          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: qty } });
+          const delta = buildStockDelta(item, 1);
+          if (!Object.keys(delta).length) continue;
+          await Product.findByIdAndUpdate(item.productId, { $inc: delta });
         }
       }
     }
@@ -199,8 +210,9 @@ exports.updateInvoice = async (req, res) => {
     if (existing.stockReduced) {
       for (const item of existing.items || []) {
         if (item.productId) {
-          const qty = Number(item.quantity) || 0;
-          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -qty } });
+          const delta = buildStockDelta(item, -1);
+          if (!Object.keys(delta).length) continue;
+          await Product.findByIdAndUpdate(item.productId, { $inc: delta });
         }
       }
     }
@@ -230,10 +242,11 @@ exports.deleteInvoice = async (req, res) => {
     if (invoice.stockReduced !== false) {
       for (const item of invoice.items || []) {
         if (item.productId) {
-          const qty = Number(item.quantity) || 0;
+          const delta = buildStockDelta(item, 1);
+          if (!Object.keys(delta).length) continue;
           await Product.findByIdAndUpdate(
             item.productId,
-            { $inc: { stock: qty } }
+            { $inc: delta }
           );
         }
       }
@@ -258,10 +271,11 @@ exports.finalizeInvoiceStock = async (req, res) => {
 
     for (const item of invoice.items || []) {
       if (item.productId) {
-        const qty = Number(item.quantity) || 0;
+        const delta = buildStockDelta(item, -1);
+        if (!Object.keys(delta).length) continue;
         await Product.findByIdAndUpdate(
           item.productId,
-          { $inc: { stock: -qty } },
+          { $inc: delta },
           { new: true }
         );
       }

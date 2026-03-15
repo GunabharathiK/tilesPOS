@@ -268,28 +268,6 @@ const Products = () => {
     return (
       <Box sx={{ fontFamily: "'Noto Sans', sans-serif" }}>
 
-        {/* Page header — clean light */}
-        <Box sx={{
-          background: C.white,
-          px: 3, py: 2.2,
-          mb: 3,
-          display: "flex", alignItems: "flex-end", justifyContent: "space-between",
-          borderBottom: `3px solid ${C.blue}`,
-          borderLeft: `4px solid ${C.blue}`,
-        }}>
-          <Box>
-            <Typography sx={{ fontSize: 10, fontWeight: 800, color: C.blue, textTransform: "uppercase", letterSpacing: ".12em", mb: 0.4 }}>
-              Inventory Management
-            </Typography>
-            <Typography sx={{ fontSize: 26, fontWeight: 900, color: C.ink, lineHeight: 1, letterSpacing: "-.01em" }}>
-              Products
-            </Typography>
-          </Box>
-          <Typography sx={{ fontSize: 12, color: C.faint, pb: 0.3 }}>
-            {products.length} total products
-          </Typography>
-        </Box>
-
         {/* ── Stat cards ── */}
         <Box sx={{ display: "grid", gap: 0, gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(5, 1fr)" }, mb: 3, border: `1px solid ${C.border}`, borderRight: "none" }}>
           {[
@@ -617,18 +595,12 @@ const Products = () => {
       if (editProduct) return <AddItem />;
       return (
         <Box sx={{ background: C.white, border: `1px solid ${C.border}` }}>
-          {/* Header — clean light with blue accent */}
           <Box sx={{
             px: 3, py: 2,
-            borderBottom: `3px solid ${C.blue}`,
-            borderLeft: `4px solid ${C.blue}`,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
+            borderBottom: `1px solid ${C.border}`,
+            display: "flex", alignItems: "center", justifyContent: "flex-end",
             background: C.white,
           }}>
-            <Box>
-              <Typography sx={{ fontSize: 10, fontWeight: 800, color: C.blue, textTransform: "uppercase", letterSpacing: ".12em", mb: 0.3 }}>Inventory</Typography>
-              <Typography sx={{ fontSize: 20, fontWeight: 900, color: C.ink }}>Add Product</Typography>
-            </Box>
             <ToggleButtonGroup
               value={addMode}
               exclusive
