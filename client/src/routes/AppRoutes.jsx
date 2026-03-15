@@ -3,16 +3,17 @@ import Layout          from "../components/layout/Layout";
 import Dashboard       from "../pages/Dashboard";
 import Products        from "../pages/Products";
 import Invoice         from "../pages/Invoice";
-import InvoicePreview  from "../pages/InvoicePreview";
 import CustomerList    from "../pages/CustomerList";
 import Customers       from "../pages/Customers";
 import Reports         from "../pages/Reports";
 import Settings        from "../pages/Settings";
 import Login           from "../pages/Login";
+import BillFormat      from "../components/billing/BillFormat";
 
 import SupplierPayment    from "../components/supplier/SupplierPayment";
 import SupplierManagement from "../pages/SupplierManagement";
-import SupplierProductDetails from "../pages/SupplierProductDetails";
+import SupplierDetails from "../components/supplier/SupplierDetails";
+import PurchaseDetails from "../pages/PurchaseDetails";
 import SupplierCreate     from "../components/supplier/SupplierCreate";
 import SupplierProducts   from "../components/supplier/SupplierProduct";
 
@@ -52,25 +53,30 @@ const AppRoutes = () => {
           <Route path="products/details" element={<Products />} />
           <Route path="invoice"         element={<Invoice />} />
           <Route path="quotation"       element={<Invoice mode="quotation" />} />
-          <Route path="invoice-preview" element={<InvoicePreview />} />
           <Route path="customers"          element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/create"   element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/bill"     element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/details" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="customers/payments" element={<AdminRoute><Customers /></AdminRoute>} />
           <Route path="reports"            element={<AdminRoute><Reports /></AdminRoute>} />
-          <Route path="bill-format"        element={<AdminRoute><Navigate to="/settings" replace /></AdminRoute>} />
+          <Route path="bill-format"        element={<AdminRoute><BillFormat /></AdminRoute>} />
 
           {/* Admin only */}
           <Route path="CustomerList" element={<AdminRoute><CustomerList /></AdminRoute>} />
-          <Route path="settings"     element={<AdminRoute><Settings /></AdminRoute>} />
+          <Route path="settings"     element={<AdminRoute><Navigate to="/company-profile" replace /></AdminRoute>} />
+          <Route path="company-profile"        element={<AdminRoute><Settings section="company-profile" /></AdminRoute>} />
+          <Route path="invoice-settings"       element={<AdminRoute><Settings section="invoice-settings" /></AdminRoute>} />
+          <Route path="product-defaults"       element={<AdminRoute><Settings section="product-defaults" /></AdminRoute>} />
+          <Route path="user-management"        element={<AdminRoute><Settings section="user-management" /></AdminRoute>} />
+          <Route path="backup-data"            element={<AdminRoute><Settings section="backup-data" /></AdminRoute>} />
 
           {/* Supplier routes */}
           <Route path="suppliers"          element={<SupplierManagement />} />
           <Route path="suppliers/create"   element={<SupplierCreateWrapper  />} />
-          <Route path="suppliers/details"  element={<SupplierProductDetails />} />
+          <Route path="suppliers/details"  element={<SupplierDetails />} />
           <Route path="suppliers/products" element={<SupplierProductWrapper />} />
           <Route path="suppliers/payment"  element={<SupplierPaymentWrapper />} />
+          <Route path="purchase/details"   element={<AdminRoute><PurchaseDetails /></AdminRoute>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

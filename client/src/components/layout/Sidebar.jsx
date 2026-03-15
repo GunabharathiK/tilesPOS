@@ -1,6 +1,6 @@
 import {
   Box, Typography, Avatar, Divider,
-  Menu, MenuItem, Chip, Collapse, IconButton, Tooltip,
+  Menu, MenuItem, Collapse, Tooltip,
 } from "@mui/material";
 
 import DashboardIcon     from "@mui/icons-material/Dashboard";
@@ -16,41 +16,64 @@ import AddBoxIcon        from "@mui/icons-material/AddBox";
 import PersonAddIcon     from "@mui/icons-material/PersonAdd";
 import ReceiptLongIcon   from "@mui/icons-material/ReceiptLong";
 import AssessmentIcon    from "@mui/icons-material/Assessment";
-import ExpandLessIcon    from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon    from "@mui/icons-material/ExpandMore";
 import ChevronLeftIcon   from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon  from "@mui/icons-material/ChevronRight";
 import LogoutIcon        from "@mui/icons-material/Logout";
-import PhoneIcon         from "@mui/icons-material/Phone";
+import PointOfSaleIcon   from "@mui/icons-material/PointOfSale";
+import BackupIcon        from "@mui/icons-material/Backup";
+import ExpandMoreIcon    from "@mui/icons-material/ExpandMore";
 
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
-const SIDEBAR_WIDTH = 224;
-const COLLAPSED_WIDTH = 64;
+/* ─── Dimensions ─────────────────────────────────────────────────── */
+const SIDEBAR_WIDTH   = 232;
+const COLLAPSED_WIDTH = 56;
 
-/* ─── tiny helpers ─────────────────────────────────────────────────────── */
+/* ─── Design tokens ──────────────────────────────────────────────── */
+const S = {
+  bg:         "#0b1120",       // deepest bg
+  surface:    "#111827",       // card/section bg
+  elevated:   "#1a2438",       // hover / active bg
+  border:     "#1f2d40",       // subtle dividers
+  borderMid:  "#2a3a50",       // stronger dividers
+  accent:     "#f59e0b",       // amber — primary highlight
+  accentDim:  "rgba(245,158,11,.12)",
+  accentText: "#fcd34d",
+  info:       "#3b82f6",
+  infoDim:    "rgba(59,130,246,.10)",
+  infoText:   "#93c5fd",
+  text:       "#f1f5f9",
+  textSub:    "#94a3b8",
+  textMute:   "#475569",
+  success:    "#10b981",
+  successDim: "rgba(16,185,129,.10)",
+};
+
+/* ─── Section label ──────────────────────────────────────────────── */
 const NavSection = ({ label }) => (
-  <Typography
-    sx={{
-      px: 2,
-      pt: 2,
-      pb: 0.5,
-      fontSize: 10,
-      fontWeight: 700,
-      letterSpacing: "0.1em",
-      color: "#475569",
-      textTransform: "uppercase",
-      userSelect: "none",
-    }}
-  >
-    {label}
-  </Typography>
+  <Box sx={{ px: 2, pt: 2.2, pb: 0.6 }}>
+    <Box sx={{ height: 1, background: S.border, mb: 1 }} />
+    <Typography sx={{ fontSize: 9.5, fontWeight: 800, letterSpacing: "0.12em", color: S.textMute, textTransform: "uppercase", userSelect: "none" }}>
+      {label}
+    </Typography>
+  </Box>
 );
 
-const NavBtn = ({ icon, label, active, subActive, indent = false, onClick, to, collapsed, color = "#facc15" }) => {
+/* ─── Nav item ───────────────────────────────────────────────────── */
+const NavBtn = ({
+  icon, label, active, subActive, indent = false,
+  onClick, to, collapsed, hasChildren, isOpen,
+  color = S.accent, colorDim = S.accentDim, colorText = S.accentText,
+}) => {
   const Tag = to ? Link : "div";
+
+  const bg    = active    ? colorDim   : subActive ? S.infoDim : "transparent";
+  const clr   = active    ? color      : subActive ? S.info    : S.textMute;
+  const txtClr= active    ? colorText  : subActive ? S.infoText: S.textSub;
+  const bar   = active    ? color      : subActive ? S.info    : "transparent";
+
   return (
     <Tooltip title={collapsed ? label : ""} placement="right" arrow>
       <Box
@@ -58,244 +81,289 @@ const NavBtn = ({ icon, label, active, subActive, indent = false, onClick, to, c
         to={to}
         onClick={onClick}
         sx={{
+          position: "relative",
           display: "flex",
           alignItems: "center",
-          gap: 1.4,
-          px: collapsed ? 0 : indent ? 3.5 : 2,
-          py: 0.85,
-          mx: collapsed ? "auto" : 1,
-          mt: 0.3,
-          width: collapsed ? 40 : "auto",
-          height: collapsed ? 40 : "auto",
-          borderRadius: "10px",
+          gap: 0,
+          px: 0,
+          mx: 0,
+          height: collapsed ? 44 : 36,
           cursor: "pointer",
           textDecoration: "none",
-          background: active
-            ? "rgba(250,204,21,0.10)"
-            : subActive
-            ? "rgba(96,165,250,0.08)"
-            : "transparent",
-          borderLeft: collapsed
-            ? "none"
-            : active
-            ? `3px solid ${color}`
-            : subActive
-            ? "3px solid #60a5fa"
-            : "3px solid transparent",
-          transition: "all 0.15s ease",
+          background: bg,
+          borderLeft: `2px solid ${bar}`,
+          transition: "background .13s, border-color .13s",
           justifyContent: collapsed ? "center" : "flex-start",
           "&:hover": {
-            background: active
-              ? "rgba(250,204,21,0.14)"
-              : "rgba(255,255,255,0.05)",
+            background: active ? colorDim : S.elevated,
+            borderLeftColor: active ? color : subActive ? S.info : S.borderMid,
           },
         }}
       >
-        <Box
-          sx={{
-            fontSize: 18,
-            display: "flex",
-            alignItems: "center",
-            color: active ? color : subActive ? "#60a5fa" : "#64748b",
-            flexShrink: 0,
-          }}
-        >
+        {/* Icon */}
+        <Box sx={{
+          width: collapsed ? COLLAPSED_WIDTH : 44,
+          minWidth: collapsed ? COLLAPSED_WIDTH : 44,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: clr, fontSize: 18, flexShrink: 0,
+          pl: indent && !collapsed ? 0.5 : 0,
+        }}>
           {icon}
         </Box>
+
+        {/* Label */}
         {!collapsed && (
-          <Typography
-            sx={{
-              fontSize: indent ? 13 : 13.5,
-              fontWeight: active || subActive ? 600 : 400,
-              color: active ? "#f1f5f9" : subActive ? "#93c5fd" : "#94a3b8",
-              lineHeight: 1,
-              flex: 1,
-              whiteSpace: "nowrap",
-            }}
-          >
+          <Typography sx={{
+            fontSize: indent ? 12.5 : 13,
+            fontWeight: active || subActive ? 700 : 500,
+            color: txtClr,
+            lineHeight: 1,
+            flex: 1,
+            whiteSpace: "nowrap",
+            letterSpacing: active ? ".01em" : "normal",
+          }}>
             {label}
           </Typography>
+        )}
+
+        {/* Expand caret */}
+        {!collapsed && hasChildren && (
+          <Box sx={{ pr: 1.5, color: S.textMute, display: "flex", alignItems: "center", transition: "transform .2s", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+            <ExpandMoreIcon sx={{ fontSize: 15 }} />
+          </Box>
         )}
       </Box>
     </Tooltip>
   );
 };
 
-/* ─── Sidebar ────────────────────────────────────────────────────────────── */
+/* ─── Sub-items wrapper ──────────────────────────────────────────── */
+const SubGroup = ({ children }) => (
+  <Box sx={{ background: "rgba(0,0,0,.18)", borderLeft: `2px solid ${S.border}`, ml: 0 }}>
+    {children}
+  </Box>
+);
+
+/* ─── Sidebar ────────────────────────────────────────────────────── */
 const Sidebar = ({ open = true, onToggle }) => {
-  const [anchorEl, setAnchorEl]       = useState(null);
+  const [anchorEl,     setAnchorEl]     = useState(null);
   const [productsOpen, setProductsOpen] = useState(false);
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [customerOpen, setCustomerOpen] = useState(false);
+  const [salesOpen,    setSalesOpen]    = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const navigate  = useNavigate();
   const location  = useLocation();
   const { user, logout, isAdmin } = useAuth();
 
   const collapsed = !open;
+  const w = collapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH;
 
   const handleLogout = () => { logout(); navigate("/login"); };
 
+  /* ── Active checks ── */
   const isProductsActive = location.pathname.startsWith("/products");
-  const isSupplierActive = location.pathname.startsWith("/suppliers");
+  const isPurchaseActive = location.pathname.startsWith("/suppliers/products") || location.pathname.startsWith("/purchase/details");
+  const isSupplierActive = location.pathname.startsWith("/suppliers") && !isPurchaseActive;
   const isCustomerActive = location.pathname.startsWith("/customers");
+  const isSalesActive    = location.pathname === "/quotation" || location.pathname === "/customers/bill";
+  const isSettingsActive = ["/company-profile", "/invoice-settings", "/product-defaults", "/user-management", "/backup-data"].includes(location.pathname);
 
+  /* ── Sub-item configs ── */
+  const salesSubItems = [
+    { label: "Quotation",   icon: <ReceiptIcon      sx={{ fontSize: 16 }} />, path: "/quotation" },
+    { label: "Create Bill", icon: <ReceiptLongIcon  sx={{ fontSize: 16 }} />, path: "/customers/bill" },
+  ];
   const productSubItems = [
-    { label: "Add Products",     icon: <AddBoxIcon sx={{ fontSize: 17 }} />,   path: "/products/add" },
-    { label: "Product Details",  icon: <ListAltIcon sx={{ fontSize: 17 }} />,  path: "/products/details" },
+    { label: "Add Products",    icon: <AddBoxIcon   sx={{ fontSize: 16 }} />, path: "/products/add" },
+    { label: "Product Details", icon: <ListAltIcon  sx={{ fontSize: 16 }} />, path: "/products/details" },
   ];
-
   const customerSubItems = [
-    { label: "Create Customer",    icon: <PersonAddIcon sx={{ fontSize: 17 }} />,   path: "/customers/create" },
-    { label: "Create Bill",        icon: <ReceiptLongIcon sx={{ fontSize: 17 }} />, path: "/customers/bill" },
-    { label: "Customer Details",   icon: <PeopleIcon sx={{ fontSize: 17 }} />,      path: "/customers/details" },
-    { label: "Customer Payments",  icon: <PaymentsIcon sx={{ fontSize: 17 }} />,    path: "/customers/payments" },
+    { label: "Create Customer",   icon: <PersonAddIcon  sx={{ fontSize: 16 }} />, path: "/customers/create" },
+    { label: "Customer Details",  icon: <PeopleIcon     sx={{ fontSize: 16 }} />, path: "/customers/details" },
+    { label: "Customer Payments", icon: <PaymentsIcon   sx={{ fontSize: 16 }} />, path: "/customers/payments" },
   ];
-
   const supplierSubItems = [
-    { label: "Supplier Create",          icon: <AddBusinessIcon sx={{ fontSize: 17 }} />, path: "/suppliers/create" },
-    { label: "Purchase Products",        icon: <ListAltIcon sx={{ fontSize: 17 }} />,     path: "/suppliers/products" },
-    { label: "Pay to Supplier",          icon: <PaymentsIcon sx={{ fontSize: 17 }} />,    path: "/suppliers/payment" },
-    { label: "Supplier Product Details", icon: <ListAltIcon sx={{ fontSize: 17 }} />,     path: "/suppliers/details" },
+    { label: "Supplier Create", icon: <AddBusinessIcon  sx={{ fontSize: 16 }} />, path: "/suppliers/create" },
+    { label: "Pay to Supplier", icon: <PaymentsIcon     sx={{ fontSize: 16 }} />, path: "/suppliers/payment" },
+    { label: "Supplier Details", icon: <ListAltIcon     sx={{ fontSize: 16 }} />, path: "/suppliers/details" },
   ];
-
-  const w = collapsed ? COLLAPSED_WIDTH : SIDEBAR_WIDTH;
+  const purchaseSubItems = [
+    { label: "Purchase Products", icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/suppliers/products" },
+    { label: "Purchase Details",  icon: <ListAltIcon sx={{ fontSize: 16 }} />, path: "/purchase/details" },
+  ];
+  const settingsSubItems = [
+    { label: "Company Profile",         icon: <AddBusinessIcon sx={{ fontSize: 16 }} />, path: "/company-profile" },
+    { label: "Invoice Settings",        icon: <ReceiptIcon     sx={{ fontSize: 16 }} />, path: "/invoice-settings" },
+    { label: "Product Defaults",        icon: <InventoryIcon   sx={{ fontSize: 16 }} />, path: "/product-defaults" },
+    { label: "User Management",         icon: <PeopleIcon      sx={{ fontSize: 16 }} />, path: "/user-management" },
+    { label: "Backup & Data",           icon: <BackupIcon      sx={{ fontSize: 16 }} />, path: "/backup-data" },
+  ];
 
   return (
-    <Box
-      sx={{
-        width: w,
-        minWidth: w,
-        height: "100vh",
-        position: "sticky",
-        top: 0,
-        alignSelf: "flex-start",
-        background: "#0f172a",
-        borderRight: "1px solid #1e293b",
-        display: "flex",
-        flexDirection: "column",
-        transition: "width 0.22s cubic-bezier(.4,0,.2,1), min-width 0.22s cubic-bezier(.4,0,.2,1)",
-        overflow: "hidden",
-        boxShadow: "4px 0 24px rgba(0,0,0,0.18)",
-        zIndex: 100,
-      }}
-    >
-      {/* ── TOP: logo + toggle ── */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: collapsed ? "center" : "space-between",
-          px: collapsed ? 0 : 2,
-          py: 1.6,
-          borderBottom: "1px solid #1e293b",
-          minHeight: 58,
-        }}
-      >
+    <Box sx={{
+      width: w, minWidth: w,
+      height: "100vh",
+      position: "sticky", top: 0, alignSelf: "flex-start",
+      background: S.bg,
+      borderRight: `1px solid ${S.border}`,
+      display: "flex", flexDirection: "column",
+      transition: "width .22s cubic-bezier(.4,0,.2,1), min-width .22s cubic-bezier(.4,0,.2,1)",
+      overflow: "hidden",
+      zIndex: 100,
+    }}>
+
+      {/* ── Brand bar ── */}
+      <Box sx={{
+        height: 52,
+        display: "flex", alignItems: "center",
+        justifyContent: collapsed ? "center" : "space-between",
+        px: collapsed ? 0 : 0,
+        borderBottom: `1px solid ${S.border}`,
+        flexShrink: 0,
+      }}>
+        {/* Logo mark */}
         {!collapsed && (
-          <Typography
-            sx={{
-              fontSize: 17,
-              fontWeight: 800,
-              fontFamily: "Rajdhani, sans-serif",
-              color: "#f1f5f9",
-              letterSpacing: "0.02em",
-            }}
-          >
-            Renix<Box component="span" sx={{ color: "#facc15" }}>Bill</Box>
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0, height: "100%", pl: 0 }}>
+            {/* Accent stripe */}
+            <Box sx={{ width: 3, height: "100%", background: S.accent, flexShrink: 0 }} />
+            <Box sx={{ pl: 2 }}>
+              <Typography sx={{ fontSize: 16, fontWeight: 900, color: S.text, letterSpacing: "-.01em", lineHeight: 1, fontFamily: "'DM Mono', monospace" }}>
+                Renix<Box component="span" sx={{ color: S.accent }}>Bill</Box>
+              </Typography>
+              <Typography sx={{ fontSize: 9.5, color: S.textMute, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase", mt: 0.3 }}>
+                Billing System
+              </Typography>
+            </Box>
+          </Box>
         )}
-        <Tooltip title={collapsed ? "Expand sidebar" : "Collapse sidebar"} placement="right">
-          <IconButton
+
+        {/* Collapsed: just the dot mark */}
+        {collapsed && (
+          <Box sx={{ width: 28, height: 28, background: S.accent, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Typography sx={{ fontSize: 12, fontWeight: 900, color: S.bg, fontFamily: "'DM Mono', monospace", lineHeight: 1 }}>R</Typography>
+          </Box>
+        )}
+
+        {/* Toggle btn */}
+        {!collapsed && (
+          <Box
             onClick={onToggle}
-            size="small"
             sx={{
-              color: "#64748b",
-              width: 30,
-              height: 30,
-              borderRadius: "8px",
-              background: "#1e293b",
-              border: "1px solid #334155",
-              "&:hover": { background: "#334155", color: "#f1f5f9" },
-              transition: "all 0.15s",
+              width: 28, height: 52,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", color: S.textMute, flexShrink: 0,
+              borderLeft: `1px solid ${S.border}`,
+              "&:hover": { background: S.elevated, color: S.text },
+              transition: "all .14s",
             }}
           >
-            {collapsed ? <ChevronRightIcon sx={{ fontSize: 16 }} /> : <ChevronLeftIcon sx={{ fontSize: 16 }} />}
-          </IconButton>
-        </Tooltip>
+            <ChevronLeftIcon sx={{ fontSize: 15 }} />
+          </Box>
+        )}
       </Box>
 
-      {/* ── SCROLLABLE NAV ── */}
-      <Box sx={{ flex: 1, overflowY: "auto", overflowX: "hidden", py: 1, "&::-webkit-scrollbar": { width: 4 }, "&::-webkit-scrollbar-thumb": { background: "#334155", borderRadius: 4 } }}>
+      {/* Collapsed toggle */}
+      {collapsed && (
+        <Box
+          onClick={onToggle}
+          sx={{
+            height: 36,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: S.textMute, borderBottom: `1px solid ${S.border}`,
+            "&:hover": { background: S.elevated, color: S.text },
+            transition: "all .14s",
+          }}
+        >
+          <ChevronRightIcon sx={{ fontSize: 15 }} />
+        </Box>
+      )}
 
-        {!collapsed && <NavSection label="Main" />}
+      {/* ── Scrollable nav ── */}
+      <Box sx={{
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        pb: 1,
+        "&::-webkit-scrollbar": { width: 3 },
+        "&::-webkit-scrollbar-track": { background: "transparent" },
+        "&::-webkit-scrollbar-thumb": { background: S.border },
+      }}>
 
         <NavBtn
-          icon={<DashboardIcon sx={{ fontSize: 19 }} />}
+          icon={<DashboardIcon sx={{ fontSize: 18 }} />}
           label="Dashboard"
           active={location.pathname === "/"}
           to="/"
           collapsed={collapsed}
         />
-        <NavBtn
-          icon={<ReceiptIcon sx={{ fontSize: 19 }} />}
-          label="Quotation"
-          active={location.pathname === "/quotation"}
-          to="/quotation"
-          collapsed={collapsed}
-        />
 
-        {!collapsed && <NavSection label="Inventory" />}
-
-        {/* Products */}
+        {/* Sales */}
         <NavBtn
-          icon={<InventoryIcon sx={{ fontSize: 19 }} />}
-          label="Product"
-          active={isProductsActive && !collapsed}
+          icon={<PointOfSaleIcon sx={{ fontSize: 18 }} />}
+          label="Sales"
+          active={isSalesActive && !collapsed}
           collapsed={collapsed}
-          onClick={() => { navigate("/products"); setProductsOpen((v) => !v); }}
+          hasChildren
+          isOpen={salesOpen}
+          onClick={() => setSalesOpen(v => !v)}
         />
         {!collapsed && (
-          <Collapse in={productsOpen} timeout="auto" unmountOnExit>
-            {productSubItems.map((sub) => (
-              <NavBtn
-                key={sub.path}
-                icon={sub.icon}
-                label={sub.label}
-                subActive={location.pathname === sub.path}
-                to={sub.path}
-                indent
-                collapsed={false}
-              />
-            ))}
+          <Collapse in={salesOpen} timeout={160} unmountOnExit>
+            <SubGroup>
+              {salesSubItems.map(sub => (
+                <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                  subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+              ))}
+            </SubGroup>
           </Collapse>
         )}
 
-        {!collapsed && isAdmin && <NavSection label="Operations" />}
+        {/* Purchase */}
+        {isAdmin && (
+          <>
+            <NavBtn
+              icon={<LocalShippingIcon sx={{ fontSize: 18 }} />}
+              label="Purchase"
+              active={isPurchaseActive && !collapsed}
+              collapsed={collapsed}
+              hasChildren
+              isOpen={purchaseOpen}
+              onClick={() => { navigate("/suppliers/products"); setPurchaseOpen(v => !v); }}
+            />
+            {!collapsed && (
+              <Collapse in={purchaseOpen} timeout={160} unmountOnExit>
+                <SubGroup>
+                  {purchaseSubItems.map(sub => (
+                    <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                      subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+                  ))}
+                </SubGroup>
+              </Collapse>
+            )}
+          </>
+        )}
 
         {/* Customer */}
         {isAdmin && (
           <>
             <NavBtn
-              icon={<PeopleIcon sx={{ fontSize: 19 }} />}
+              icon={<PeopleIcon sx={{ fontSize: 18 }} />}
               label="Customer"
               active={isCustomerActive && !collapsed}
               collapsed={collapsed}
-              onClick={() => { navigate("/customers"); setCustomerOpen((v) => !v); }}
+              hasChildren
+              isOpen={customerOpen}
+              onClick={() => { navigate("/customers"); setCustomerOpen(v => !v); }}
             />
             {!collapsed && (
-              <Collapse in={customerOpen} timeout="auto" unmountOnExit>
-                {customerSubItems.map((sub) => (
-                  <NavBtn
-                    key={sub.path}
-                    icon={sub.icon}
-                    label={sub.label}
-                    subActive={location.pathname === sub.path}
-                    to={sub.path}
-                    indent
-                    collapsed={false}
-                  />
-                ))}
+              <Collapse in={customerOpen} timeout={160} unmountOnExit>
+                <SubGroup>
+                  {customerSubItems.map(sub => (
+                    <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                      subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+                  ))}
+                </SubGroup>
               </Collapse>
             )}
           </>
@@ -305,35 +373,51 @@ const Sidebar = ({ open = true, onToggle }) => {
         {isAdmin && (
           <>
             <NavBtn
-              icon={<LocalShippingIcon sx={{ fontSize: 19 }} />}
+              icon={<AddBusinessIcon sx={{ fontSize: 18 }} />}
               label="Supplier"
               active={isSupplierActive && !collapsed}
               collapsed={collapsed}
-              onClick={() => { navigate("/suppliers"); setSupplierOpen((v) => !v); }}
+              hasChildren
+              isOpen={supplierOpen}
+              onClick={() => { navigate("/suppliers"); setSupplierOpen(v => !v); }}
             />
             {!collapsed && (
-              <Collapse in={supplierOpen} timeout="auto" unmountOnExit>
-                {supplierSubItems.map((sub) => (
-                  <NavBtn
-                    key={sub.path}
-                    icon={sub.icon}
-                    label={sub.label}
-                    subActive={location.pathname === sub.path}
-                    to={sub.path}
-                    indent
-                    collapsed={false}
-                  />
-                ))}
+              <Collapse in={supplierOpen} timeout={160} unmountOnExit>
+                <SubGroup>
+                  {supplierSubItems.map(sub => (
+                    <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                      subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+                  ))}
+                </SubGroup>
               </Collapse>
             )}
           </>
         )}
 
-        {!collapsed && isAdmin && <NavSection label="System" />}
+        {/* Product */}
+        <NavBtn
+          icon={<InventoryIcon sx={{ fontSize: 18 }} />}
+          label="Product"
+          active={isProductsActive && !collapsed}
+          collapsed={collapsed}
+          hasChildren
+          isOpen={productsOpen}
+          onClick={() => { navigate("/products"); setProductsOpen(v => !v); }}
+        />
+        {!collapsed && (
+          <Collapse in={productsOpen} timeout={160} unmountOnExit>
+            <SubGroup>
+              {productSubItems.map(sub => (
+                <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                  subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+              ))}
+            </SubGroup>
+          </Collapse>
+        )}
 
         {isAdmin && (
           <NavBtn
-            icon={<AssessmentIcon sx={{ fontSize: 19 }} />}
+            icon={<AssessmentIcon sx={{ fontSize: 18 }} />}
             label="Reports"
             active={location.pathname === "/reports"}
             to="/reports"
@@ -342,113 +426,92 @@ const Sidebar = ({ open = true, onToggle }) => {
         )}
 
         {isAdmin && (
-          <NavBtn
-            icon={<SettingsIcon sx={{ fontSize: 19 }} />}
-            label="Settings"
-            active={location.pathname === "/settings"}
-            to="/settings"
-            collapsed={collapsed}
-          />
+          <>
+            <NavBtn
+              icon={<SettingsIcon sx={{ fontSize: 18 }} />}
+              label="Settings"
+              active={isSettingsActive && !collapsed}
+              collapsed={collapsed}
+              hasChildren
+              isOpen={settingsOpen}
+              onClick={() => setSettingsOpen(v => !v)}
+            />
+            {!collapsed && (
+              <Collapse in={settingsOpen} timeout={160} unmountOnExit>
+                <SubGroup>
+                  {settingsSubItems.map(sub => (
+                    <NavBtn key={sub.path} icon={sub.icon} label={sub.label}
+                      subActive={location.pathname === sub.path} to={sub.path} indent collapsed={false} />
+                  ))}
+                </SubGroup>
+              </Collapse>
+            )}
+          </>
         )}
       </Box>
 
-      {/* ── BOTTOM: user profile ── */}
-      <Box sx={{ borderTop: "1px solid #1e293b" }}>
+      {/* ── User zone ── */}
+      <Box sx={{ borderTop: `1px solid ${S.border}`, flexShrink: 0 }}>
+
         {collapsed ? (
-          /* collapsed avatar only */
+          /* Collapsed: avatar only */
           <Tooltip title={user?.name || "User"} placement="right">
             <Box
-              onClick={(e) => setAnchorEl(e.currentTarget)}
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                py: 1.5,
-                cursor: "pointer",
-              }}
+              onClick={e => setAnchorEl(e.currentTarget)}
+              sx={{ height: 52, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", "&:hover": { background: S.elevated }, transition: "background .13s" }}
             >
-              <Avatar
-                sx={{
-                  width: 34,
-                  height: 34,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  bgcolor: "#facc15",
-                  color: "#0f172a",
-                }}
-              >
+              <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 800, bgcolor: S.accent, color: S.bg }}>
                 {user?.name?.[0]?.toUpperCase() || "U"}
               </Avatar>
             </Box>
           </Tooltip>
         ) : (
-          /* expanded profile card */
-          <Box sx={{ p: 1.5 }}>
-            <Box
-              onClick={(e) => setAnchorEl(e.currentTarget)}
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.3,
-                p: 1.2,
-                borderRadius: "12px",
-                cursor: "pointer",
-                background: "#1e293b",
-                border: "1px solid #334155",
-                "&:hover": { background: "#263347", borderColor: "#475569" },
-                transition: "all 0.15s",
-              }}
-            >
-              <Avatar
-                sx={{
-                  width: 36,
-                  height: 36,
-                  fontSize: 15,
-                  fontWeight: 800,
-                  bgcolor: "#facc15",
-                  color: "#0f172a",
-                  flexShrink: 0,
-                }}
-              >
-                {user?.name?.[0]?.toUpperCase() || "U"}
-              </Avatar>
+          /* Expanded: full user card */
+          <Box
+            onClick={e => setAnchorEl(e.currentTarget)}
+            sx={{
+              display: "flex", alignItems: "center", gap: 1.4,
+              px: 1.6, py: 1.3,
+              cursor: "pointer",
+              borderTop: `2px solid ${S.accent}`,
+              "&:hover": { background: S.elevated },
+              transition: "background .13s",
+            }}
+          >
+            <Avatar sx={{ width: 34, height: 34, fontSize: 13, fontWeight: 900, bgcolor: S.accent, color: S.bg, flexShrink: 0, borderRadius: 0 }}>
+              {user?.name?.[0]?.toUpperCase() || "U"}
+            </Avatar>
 
-              <Box sx={{ flex: 1, overflow: "hidden" }}>
-                <Typography
-                  noWrap
-                  sx={{ fontSize: 13, fontWeight: 700, color: "#f1f5f9", lineHeight: 1.2 }}
-                >
-                  {user?.name || "User"}
-                </Typography>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.4 }}>
-                  <Chip
-                    label={user?.role === "admin" ? "Admin" : "Staff"}
-                    size="small"
-                    sx={{
-                      height: 16,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      px: 0.5,
-                      background: user?.role === "admin" ? "#facc15" : "#334155",
-                      color: user?.role === "admin" ? "#0f172a" : "#94a3b8",
-                      "& .MuiChip-label": { px: 0.8 },
-                    }}
-                  />
-                  {user?.phone && (
-                    <Typography
-                      noWrap
-                      sx={{ fontSize: 11, color: "#475569", display: "flex", alignItems: "center", gap: 0.3 }}
-                    >
-                      <PhoneIcon sx={{ fontSize: 11 }} />
-                      {user.phone}
-                    </Typography>
-                  )}
+            <Box sx={{ flex: 1, overflow: "hidden" }}>
+              <Typography noWrap sx={{ fontSize: 13, fontWeight: 700, color: S.text, lineHeight: 1.3 }}>
+                {user?.name || "User"}
+              </Typography>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, mt: 0.3 }}>
+                {/* Role badge */}
+                <Box sx={{
+                  fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase",
+                  px: 0.8, py: "1px",
+                  background: user?.role === "admin" ? S.accent : S.border,
+                  color: user?.role === "admin" ? S.bg : S.textSub,
+                  lineHeight: 1.6,
+                }}>
+                  {user?.role === "admin" ? "Admin" : "Staff"}
                 </Box>
+                {user?.phone && (
+                  <Typography noWrap sx={{ fontSize: 10.5, color: S.textMute }}>
+                    {user.phone}
+                  </Typography>
+                )}
               </Box>
+            </Box>
+
+            <Box sx={{ color: S.textMute, display: "flex" }}>
+              <ExpandMoreIcon sx={{ fontSize: 14 }} />
             </Box>
           </Box>
         )}
 
-        {/* Dropdown menu */}
+        {/* Logout menu */}
         <Menu
           anchorEl={anchorEl}
           open={Boolean(anchorEl)}
@@ -457,31 +520,30 @@ const Sidebar = ({ open = true, onToggle }) => {
           transformOrigin={{ vertical: "bottom", horizontal: "right" }}
           PaperProps={{
             sx: {
-              borderRadius: "12px",
-              border: "1px solid #e2eaf4",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
-              minWidth: 180,
+              borderRadius: 0,
+              border: `1px solid #e2eaf4`,
+              boxShadow: "0 8px 32px rgba(0,0,0,.12)",
+              minWidth: 190,
             },
           }}
         >
-          <Box sx={{ px: 2, py: 1.2 }}>
+          {/* User info header */}
+          <Box sx={{ px: 2, py: 1.4, borderBottom: "1px solid #f1f5f9", background: "#fafbfd" }}>
             <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#1c2333" }}>{user?.name}</Typography>
-            <Typography sx={{ fontSize: 12, color: "#718096", mt: 0.2 }}>{user?.phone}</Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mt: 0.4 }}>
+              <Box sx={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", px: 0.8, py: "1px", background: user?.role === "admin" ? "#fef3c7" : "#f1f5f9", color: user?.role === "admin" ? "#92400e" : "#64748b", lineHeight: 1.6 }}>
+                {user?.role === "admin" ? "Admin" : "Staff"}
+              </Box>
+              {user?.phone && <Typography sx={{ fontSize: 11, color: "#94a3b8" }}>{user.phone}</Typography>}
+            </Box>
           </Box>
-          <Divider />
+
           <MenuItem
             onClick={handleLogout}
-            sx={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#dc2626",
-              gap: 1,
-              py: 1,
-              "&:hover": { background: "#fee2e2" },
-            }}
+            sx={{ fontSize: 13, fontWeight: 600, color: "#dc2626", gap: 1.2, py: 1.2, borderRadius: 0, "&:hover": { background: "#fef2f2" } }}
           >
             <LogoutIcon sx={{ fontSize: 16 }} />
-            Logout
+            Sign out
           </MenuItem>
         </Menu>
       </Box>

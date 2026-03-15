@@ -1,6 +1,6 @@
 const Customer = require("../models/Customer");
 
-// ✅ CREATE or UPDATE CUSTOMER (called from invoice flow)
+// CREATE or UPDATE CUSTOMER (called from invoice flow)
 exports.createOrUpdateCustomer = async (req, res) => {
   try {
     const {
@@ -65,11 +65,39 @@ exports.createOrUpdateCustomer = async (req, res) => {
   }
 };
 
-// ✅ GET ALL
+// GET ALL
 exports.getCustomers = async (req, res) => {
   try {
     const customers = await Customer.find().sort({ createdAt: -1 });
     res.json(customers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// UPDATE BY ID
+exports.updateCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const update = req.body || {};
+    const customer = await Customer.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+    res.json(customer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// DELETE BY ID
+exports.deleteCustomerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const customer = await Customer.findByIdAndDelete(id);
+    if (!customer) return res.status(404).json({ error: "Customer not found" });
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

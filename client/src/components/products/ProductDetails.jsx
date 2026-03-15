@@ -1,5 +1,6 @@
 import {
   Box, Typography, IconButton, Dialog, DialogContent,
+  TextField, MenuItem,
 } from "@mui/material";
 import EditIcon              from "@mui/icons-material/Edit";
 import DeleteIcon            from "@mui/icons-material/Delete";
@@ -8,10 +9,9 @@ import CloseIcon             from "@mui/icons-material/Close";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import SearchIcon            from "@mui/icons-material/Search";
 import InventoryIcon         from "@mui/icons-material/Inventory";
-import FileDownloadIcon      from "@mui/icons-material/FileDownload";
+import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
+import FileUploadOutlinedIcon   from "@mui/icons-material/FileUploadOutlined";
 import AddIcon               from "@mui/icons-material/Add";
-import TuneIcon              from "@mui/icons-material/Tune";
-import UploadFileIcon        from "@mui/icons-material/UploadFile";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createProduct, getProducts, updateProduct, deleteProduct } from "../../services/productService";
@@ -57,31 +57,32 @@ const getImageSrc = (p = {}) => {
 const fmt      = (n = 0) => Number(n).toLocaleString("en-IN");
 const fmtPrice = (n = 0) => `₹${fmt(Number(n).toFixed(2))}`;
 
-/* ── Inline text input style ────────────────────────────────── */
+/* ── Input style — zero border radius ── */
 const inpSx = {
   "& .MuiOutlinedInput-root": {
-    borderRadius: "6px", fontSize: 12,
+    borderRadius: 0,
+    fontSize: 12,
+    background: "#fff",
     "& fieldset": { borderColor: T.border },
     "&:hover fieldset": { borderColor: T.primary },
     "&.Mui-focused fieldset": { borderColor: T.primary, borderWidth: "1.5px" },
   },
   "& .MuiInputBase-input": { padding: "6px 10px" },
+  "& .MuiInputBase-input::placeholder": { color: "#c0cad8", opacity: 1 },
 };
 
-/* ── Category pill colors ── */
+/* ── Category colors ── */
 const CATEGORY_COLORS = {
-  "Floor Tile":  { bg: "#dbeafe", color: "#1d4ed8" },
-  "Wall Tile":   { bg: "#f3e8ff", color: "#7c3aed" },
-  "Outdoor":     { bg: "#dcfce7", color: "#16a34a" },
-  "Vitrified":   { bg: "#fef9c3", color: "#ca8a04" },
-  "default":     { bg: "#f0f4f8", color: "#64748b" },
+  "Floor Tile": { bg: "#dbeafe", color: "#1d4ed8" },
+  "Wall Tile":  { bg: "#f3e8ff", color: "#7c3aed" },
+  "Outdoor":    { bg: "#dcfce7", color: "#16a34a" },
+  "Vitrified":  { bg: "#fef9c3", color: "#ca8a04" },
+  "default":    { bg: "#f0f4f8", color: "#64748b" },
 };
-
-const getCategoryStyle = (cat) =>
-  CATEGORY_COLORS[cat] || CATEGORY_COLORS["default"];
+const getCategoryStyle = (cat) => CATEGORY_COLORS[cat] || CATEGORY_COLORS["default"];
 
 /* ══════════════════════════════════════════════════════════════
-   EDIT DIALOG  (unchanged logic)
+   EDIT DIALOG
 ══════════════════════════════════════════════════════════════ */
 const EditDialog = ({ product, open, onClose, onSaved }) => {
   const [row, setRow] = useState({});
@@ -90,45 +91,28 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
   useEffect(() => {
     if (!product) return;
     setRow({
-      name:  product.name  || "",
-      code:  product.code  || "",
-      price: product.price || "",
-      gst:   product.gst   ?? 0,
-      stock: product.stock || "",
-      size:  product.size  || "",
-      uom:   product.uom   || "",
-      category:         product.category         || "",
-      brand:            product.brand            || "",
-      hsnCode:          product.hsnCode          || "",
-      dealerPrice:      product.dealerPrice      || "",
-      contractorPrice:  product.contractorPrice  || "",
-      purchasePrice:    product.purchasePrice    || "",
-      minimumSellPrice: product.minimumSellPrice || "",
-      mrpPerBox:        product.mrpPerBox        || "",
-      stockBoxes:       product.stockBoxes       || "",
-      coverageArea:     product.coverageArea     || "",
-      reorderLevel:     product.reorderLevel     || "",
-      minStockAlert:    product.minStockAlert    || "",
-      rackLocation:     product.rackLocation     || "",
-      notes:            product.notes            || "",
-      image:            getImageSrc(product),
+      name: product.name || "", code: product.code || "",
+      price: product.price || "", gst: product.gst ?? 0,
+      stock: product.stock || "", size: product.size || "",
+      uom: product.uom || "", category: product.category || "",
+      brand: product.brand || "", hsnCode: product.hsnCode || "",
+      dealerPrice: product.dealerPrice || "", contractorPrice: product.contractorPrice || "",
+      purchasePrice: product.purchasePrice || "", minimumSellPrice: product.minimumSellPrice || "",
+      mrpPerBox: product.mrpPerBox || "", stockBoxes: product.stockBoxes || "",
+      coverageArea: product.coverageArea || "", reorderLevel: product.reorderLevel || "",
+      minStockAlert: product.minStockAlert || "", rackLocation: product.rackLocation || "",
+      notes: product.notes || "", image: getImageSrc(product),
     });
     setImgPreview(getImageSrc(product));
   }, [product]);
 
-  const set = (field) => (e) => {
-    const val = e.target.value;
-    setRow((r) => ({ ...r, [field]: val }));
-  };
+  const set = (field) => (e) => setRow((r) => ({ ...r, [field]: e.target.value }));
 
   const handleImage = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setRow((r) => ({ ...r, image: reader.result }));
-      setImgPreview(reader.result);
-    };
+    reader.onloadend = () => { setRow((r) => ({ ...r, image: reader.result })); setImgPreview(reader.result); };
     reader.readAsDataURL(file);
   };
 
@@ -137,12 +121,9 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
       toast.error("Name, Code, Price, Stock and UOM are required"); return;
     }
     try {
-      await updateProduct(product._id, {
-        ...row, totalPrice: calcTotalPrice(row.price, row.gst),
-      });
+      await updateProduct(product._id, { ...row, totalPrice: calcTotalPrice(row.price, row.gst) });
       toast.success("Product updated ✅");
-      onSaved();
-      onClose();
+      onSaved(); onClose();
     } catch { toast.error("Update failed"); }
   };
 
@@ -150,13 +131,8 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
 
   const Fld = ({ label, field, type = "text", children, span }) => (
     <Box sx={{ gridColumn: span ? `span ${span}` : undefined }}>
-      <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: "4px" }}>
-        {label}
-      </Typography>
-      {children || (
-        <TextField fullWidth size="small" type={type} sx={inpSx}
-          value={row[field] ?? ""} onChange={set(field)} />
-      )}
+      <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", mb: "4px" }}>{label}</Typography>
+      {children || <TextField fullWidth size="small" type={type} sx={inpSx} value={row[field] ?? ""} onChange={set(field)} />}
     </Box>
   );
 
@@ -168,46 +144,36 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { borderRadius: "12px", fontFamily: "'Noto Sans', sans-serif" } }}>
+      PaperProps={{ sx: { borderRadius: 0 } }}>
       <Box sx={{ background: `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`, px: 2.5, py: 2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography sx={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>
-          ✏️ Edit Product — {product.name}
-        </Typography>
-        <IconButton onClick={onClose} sx={{ color: "rgba(255,255,255,.8)" }}>
-          <CloseIcon />
-        </IconButton>
+        <Typography sx={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>✏️ Edit Product — {product.name}</Typography>
+        <IconButton onClick={onClose} sx={{ color: "rgba(255,255,255,.8)" }}><CloseIcon /></IconButton>
       </Box>
-
       <DialogContent sx={{ p: 2.5 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
           <Box sx={{ gridRow: "span 3", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
             <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".5px", alignSelf: "flex-start" }}>Product Image</Typography>
             <Box component="label" htmlFor="edit-img" sx={{
-              width: "100%", aspectRatio: "1", borderRadius: "10px",
-              border: `2px dashed ${T.border}`, cursor: "pointer",
+              width: "100%", aspectRatio: "1", border: `2px dashed ${T.border}`, cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               overflow: "hidden", background: "#f8fafc",
-              "&:hover": { borderColor: T.primary, background: T.primaryLight },
-              transition: "all .15s",
+              "&:hover": { borderColor: T.primary, background: T.primaryLight }, transition: "all .15s",
             }}>
               {imgPreview
                 ? <Box component="img" src={imgPreview} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 : <Box sx={{ textAlign: "center", color: T.muted }}>
                     <AddPhotoAlternateIcon sx={{ fontSize: 32, mb: 0.5, opacity: 0.4 }} />
                     <Typography sx={{ fontSize: 11 }}>Click to upload</Typography>
-                  </Box>
-              }
+                  </Box>}
             </Box>
             <input id="edit-img" type="file" accept="image/*" hidden onChange={handleImage} />
           </Box>
-
           <Fld label="Product Name *" field="name" />
           <Fld label="Product Code *" field="code" />
           <Fld label="Category" field="category" />
           <Fld label="Brand" field="brand" />
           <Fld label="HSN Code" field="hsnCode" />
           <Fld label="Size" field="size" />
-
           <Sec label="Pricing" />
           <Fld label="Base Price (₹) *" field="price" type="number" />
           <Fld label="GST %" field="gst">
@@ -216,7 +182,7 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
             </TextField>
           </Fld>
           <Fld label="Total Price (incl. GST)">
-            <Box sx={{ px: 1.2, py: 0.8, borderRadius: "6px", background: "#f0f4f8", border: `1.5px solid ${T.border}`, fontSize: 13, fontWeight: 700, color: T.primary, fontFamily: "'Rajdhani', sans-serif" }}>
+            <Box sx={{ px: 1.2, py: 0.8, background: "#f0f4f8", border: `1.5px solid ${T.border}`, fontSize: 13, fontWeight: 700, color: T.primary }}>
               ₹{calcTotalPrice(row.price, row.gst).toFixed(2)}
             </Box>
           </Fld>
@@ -225,7 +191,6 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
           <Fld label="Purchase Price (₹)" field="purchasePrice" type="number" />
           <Fld label="Minimum Sell Price (₹)" field="minimumSellPrice" type="number" />
           <Fld label="MRP per Box (₹)" field="mrpPerBox" type="number" />
-
           <Sec label="Stock & Inventory" />
           <Fld label="Stock (sqft/unit) *" field="stock" type="number" />
           <Fld label="Stock (Boxes)" field="stockBoxes" type="number" />
@@ -239,18 +204,16 @@ const EditDialog = ({ product, open, onClose, onSaved }) => {
           <Fld label="Rack Location" field="rackLocation" />
           <Fld label="Reorder Level" field="reorderLevel" type="number" />
           <Fld label="Min Stock Alert" field="minStockAlert" type="number" />
-
           <Sec label="Notes" />
           <Fld label="Internal Notes" field="notes" span={3}>
             <TextField fullWidth multiline rows={2} size="small" sx={inpSx} value={row.notes || ""} onChange={set("notes")} />
           </Fld>
         </Box>
-
         <Box sx={{ display: "flex", gap: 1, mt: 2.5, justifyContent: "flex-end" }}>
-          <Box onClick={onClose} sx={{ px: 2, py: 1, borderRadius: "7px", cursor: "pointer", border: `1.5px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight } }}>
+          <Box onClick={onClose} sx={{ px: 2, py: 1, cursor: "pointer", border: `1.5px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight } }}>
             Cancel
           </Box>
-          <Box onClick={handleSave} sx={{ px: 2.5, py: 1, borderRadius: "7px", cursor: "pointer", background: T.success, color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", "&:hover": { background: "#146038" } }}>
+          <Box onClick={handleSave} sx={{ px: 2.5, py: 1, cursor: "pointer", background: T.success, color: "#fff", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: "6px", "&:hover": { background: "#146038" } }}>
             <SaveIcon sx={{ fontSize: 16 }} /> Save Changes
           </Box>
         </Box>
@@ -277,21 +240,20 @@ const ViewDialog = ({ product: p, open, onClose, onEdit }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { borderRadius: "12px", overflow: "hidden" } }}>
+      PaperProps={{ sx: { borderRadius: 0, overflow: "hidden" } }}>
       <Box sx={{ background: `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`, px: 2.5, py: 2, display: "flex", gap: 2, alignItems: "center" }}>
-        <Box sx={{ width: 52, height: 52, borderRadius: "10px", overflow: "hidden", background: "rgba(255,255,255,.15)", border: "2px solid rgba(255,255,255,.25)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Box sx={{ width: 52, height: 52, overflow: "hidden", background: "rgba(255,255,255,.15)", border: "2px solid rgba(255,255,255,.25)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
           {img ? <Box component="img" src={img} sx={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <InventoryIcon sx={{ color: "rgba(255,255,255,.5)" }} />}
         </Box>
         <Box sx={{ flex: 1 }}>
           <Typography sx={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{p.name}</Typography>
           <Box sx={{ display: "flex", gap: 0.8, mt: 0.5, flexWrap: "wrap" }}>
-            {p.code && <Box sx={{ fontSize: 10, px: 0.8, py: "1px", borderRadius: "4px", background: "rgba(255,255,255,.2)", color: "#fff", fontWeight: 700 }}>{p.code.toUpperCase()}</Box>}
-            {p.category && <Box sx={{ fontSize: 10, px: 0.8, py: "1px", borderRadius: "4px", background: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.85)", fontWeight: 600 }}>{p.category}</Box>}
+            {p.code && <Box sx={{ fontSize: 10, px: 0.8, py: "1px", background: "rgba(255,255,255,.2)", color: "#fff", fontWeight: 700 }}>{p.code.toUpperCase()}</Box>}
+            {p.category && <Box sx={{ fontSize: 10, px: 0.8, py: "1px", background: "rgba(255,255,255,.15)", color: "rgba(255,255,255,.85)", fontWeight: 600 }}>{p.category}</Box>}
           </Box>
         </Box>
         <IconButton onClick={onClose} sx={{ color: "rgba(255,255,255,.8)" }}><CloseIcon /></IconButton>
       </Box>
-
       <Box sx={{ display: "flex", borderBottom: `1px solid ${T.border}`, background: "#fafbfc" }}>
         {[
           { label: "Base Price",  val: fmtPrice(p.price),    color: T.text    },
@@ -305,7 +267,6 @@ const ViewDialog = ({ product: p, open, onClose, onEdit }) => {
           </Box>
         ))}
       </Box>
-
       <DialogContent sx={{ p: 2 }}>
         <Row label="Brand"            value={p.brand} />
         <Row label="HSN Code"         value={p.hsnCode} />
@@ -324,10 +285,9 @@ const ViewDialog = ({ product: p, open, onClose, onEdit }) => {
         <Row label="Rack Location"    value={p.rackLocation} />
         {p.isSupplierItem && <Row label="Supplier" value={p.supplierName} color={T.purple} />}
         {p.notes && <Row label="Notes" value={p.notes} />}
-
         <Box sx={{ display: "flex", gap: 1, mt: 2, justifyContent: "flex-end" }}>
-          <Box onClick={onClose} sx={{ px: 2, py: 0.8, borderRadius: "7px", cursor: "pointer", border: `1.5px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, "&:hover": { borderColor: T.primary, color: T.primary } }}>Close</Box>
-          <Box onClick={() => { onClose(); onEdit(p); }} sx={{ px: 2, py: 0.8, borderRadius: "7px", cursor: "pointer", background: T.primary, color: "#fff", fontSize: 13, fontWeight: 600, "&:hover": { background: T.primaryDark } }}>✏️ Edit</Box>
+          <Box onClick={onClose} sx={{ px: 2, py: 0.8, cursor: "pointer", border: `1.5px solid ${T.border}`, color: T.text, fontSize: 13, fontWeight: 600, "&:hover": { borderColor: T.primary, color: T.primary } }}>Close</Box>
+          <Box onClick={() => { onClose(); onEdit(p); }} sx={{ px: 2, py: 0.8, cursor: "pointer", background: T.primary, color: "#fff", fontSize: 13, fontWeight: 600, "&:hover": { background: T.primaryDark } }}>✏️ Edit</Box>
         </Box>
       </DialogContent>
     </Dialog>
@@ -348,16 +308,15 @@ const ProductDetails = () => {
   const [brandF,      setBrandF]      = useState("all");
   const [sortBy,      setSortBy]      = useState("name");
   const [viewProduct, setViewProduct] = useState(null);
+  const [editProduct, setEditProduct] = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [importing,   setImporting]   = useState(false);
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", name: "" });
 
   const fetchProducts = async () => {
-    try {
-      const res = await getProducts();
-      setProducts(res.data);
-    } catch { toast.error("Failed to load products"); }
-    finally  { setLoading(false); }
+    try { const res = await getProducts(); setProducts(res.data); }
+    catch { toast.error("Failed to load products"); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { fetchProducts(); }, []);
@@ -370,15 +329,8 @@ const ProductDetails = () => {
     finally { setConfirmDelete({ open: false, id: "", name: "" }); }
   };
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(products.map((p) => p.category).filter(Boolean))];
-    return cats.sort();
-  }, [products]);
-
-  const brands = useMemo(() => {
-    const bs = [...new Set(products.map((p) => p.brand).filter(Boolean))];
-    return bs.sort();
-  }, [products]);
+  const categories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort(), [products]);
+  const brands      = useMemo(() => [...new Set(products.map((p) => p.brand).filter(Boolean))].sort(), [products]);
 
   const filtered = useMemo(() => {
     let list = [...products];
@@ -396,7 +348,6 @@ const ProductDetails = () => {
     if (stockF === "ok")     list = list.filter((p) => Number(p.stock || 0) >= 10);
     if (categoryF !== "all") list = list.filter((p) => p.category === categoryF);
     if (brandF !== "all")    list = list.filter((p) => p.brand === brandF);
-
     list.sort((a, b) => {
       if (sortBy === "price_asc")  return (a.price || 0) - (b.price || 0);
       if (sortBy === "price_desc") return (b.price || 0) - (a.price || 0);
@@ -410,146 +361,92 @@ const ProductDetails = () => {
   const lowStock = products.filter((p) => Number(p.stock || 0) < 10).length;
 
   const importAliases = {
-    name: ["productname", "tilename", "itemname"],
-    code: ["sku", "productcode", "itemcode"],
-    category: ["type"],
-    brand: ["company"],
-    size: ["dimensions"],
-    uom: ["unit"],
-    price: ["baseprice", "rate", "sellingprice"],
-    gst: ["gstrate", "tax", "taxpercent"],
-    stock: ["quantity", "stockqty", "stocksqft", "stockunits"],
-    dealerPrice: ["dealerprice", "wholesaleprice"],
-    contractorPrice: ["contractorprice", "builderprice"],
-    purchasePrice: ["buyprice", "costprice"],
-    minimumSellPrice: ["minsellprice", "minimumprice"],
-    stockBoxes: ["boxes", "stockboxes"],
-    coverageArea: ["coverage", "coverageareapersqft", "coverageperbox"],
-    hsnCode: ["hsn", "hsnno"],
-    rackLocation: ["rack", "location"],
-    notes: ["remark", "remarks", "description"],
+    name: ["productname","tilename","itemname"], code: ["sku","productcode","itemcode"],
+    category: ["type"], brand: ["company"], size: ["dimensions"], uom: ["unit"],
+    price: ["baseprice","rate","sellingprice"], gst: ["gstrate","tax","taxpercent"],
+    stock: ["quantity","stockqty","stocksqft","stockunits"],
+    dealerPrice: ["dealerprice","wholesaleprice"], contractorPrice: ["contractorprice","builderprice"],
+    purchasePrice: ["buyprice","costprice"], minimumSellPrice: ["minsellprice","minimumprice"],
+    stockBoxes: ["boxes","stockboxes"], coverageArea: ["coverage","coverageareapersqft","coverageperbox"],
+    hsnCode: ["hsn","hsnno"], rackLocation: ["rack","location"], notes: ["remark","remarks","description"],
   };
 
-  const toNumber = (v, fallback = 0) => {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : fallback;
-  };
+  const toNumber = (v, fallback = 0) => { const n = Number(v); return Number.isFinite(n) ? n : fallback; };
 
-  const handleImportClick = () => importInputRef.current?.click();
+  const exportColumns = [
+    { key: "name", label: "Name" }, { key: "code", label: "Code" },
+    { key: "category", label: "Category" }, { key: "brand", label: "Brand" },
+    { key: "size", label: "Size" }, { key: "uom", label: "UOM" },
+    { key: "price", label: "Price" }, { key: "gst", label: "GST" },
+    { key: "stock", label: "Stock" }, { key: "dealerPrice", label: "Dealer Price" },
+    { key: "contractorPrice", label: "Contractor Price" }, { key: "purchasePrice", label: "Purchase Price" },
+    { key: "minimumSellPrice", label: "Minimum Sell Price" }, { key: "stockBoxes", label: "Stock Boxes" },
+    { key: "coverageArea", label: "Coverage Area" }, { key: "hsnCode", label: "HSN Code" },
+    { key: "rackLocation", label: "Rack Location" }, { key: "notes", label: "Notes" },
+  ];
+
+  const csvEscape = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+  const handleExport = () => {
+    if (!products.length) { toast.error("No products to export"); return; }
+    const header = exportColumns.map((c) => csvEscape(c.label)).join(",");
+    const body   = products.map((p) => exportColumns.map((c) => csvEscape(p?.[c.key])).join(",")).join("\n");
+    const blob = new Blob([[header, body].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `products-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast.success("Exported products CSV");
+  };
 
   const handleImportFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+    const file = e.target.files?.[0]; e.target.value = "";
     if (!file) return;
-
     try {
       setImporting(true);
-      const text = await file.text();
-      const rows = parseCsvRows(text);
-      if (!rows.length) {
-        toast.error("No import rows found");
-        return;
-      }
-
-      const payloads = rows
-        .map((row) => mapRowByFieldAliases(row, importAliases))
-        .map((mapped) => {
-          const name = String(mapped.name || "").trim();
-          const code = String(mapped.code || "").trim().toUpperCase();
-          if (!name || !code) return null;
-
-          const price = toNumber(mapped.price, 0);
-          const gst = toNumber(mapped.gst, 0);
-          const payload = {
-            name,
-            code,
-            category: mapped.category || "",
-            brand: mapped.brand || "",
-            size: mapped.size || "",
-            uom: mapped.uom || "sqrft",
-            price,
-            gst,
-            stock: toNumber(mapped.stock, 0),
-            dealerPrice: toNumber(mapped.dealerPrice, 0),
-            contractorPrice: toNumber(mapped.contractorPrice, 0),
-            purchasePrice: toNumber(mapped.purchasePrice, 0),
-            minimumSellPrice: toNumber(mapped.minimumSellPrice, 0),
-            stockBoxes: toNumber(mapped.stockBoxes, 0),
-            coverageArea: toNumber(mapped.coverageArea, 0),
-            hsnCode: mapped.hsnCode || "",
-            rackLocation: mapped.rackLocation || "",
-            notes: mapped.notes || "",
-            totalPrice: Number((price * (1 + gst / 100)).toFixed(2)),
-            isSupplierItem: false,
-          };
-          return payload;
-        })
-        .filter(Boolean);
-
-      if (!payloads.length) {
-        toast.error("Required fields missing. Ensure file has Name and Code columns.");
-        return;
-      }
-
-      const results = await Promise.allSettled(payloads.map((payload) => createProduct(payload)));
+      const rows = parseCsvRows(await file.text());
+      if (!rows.length) { toast.error("No import rows found"); return; }
+      const payloads = rows.map((row) => mapRowByFieldAliases(row, importAliases)).map((mapped) => {
+        const name = String(mapped.name || "").trim();
+        const code = String(mapped.code || "").trim().toUpperCase();
+        if (!name || !code) return null;
+        const price = toNumber(mapped.price, 0), gst = toNumber(mapped.gst, 0);
+        return { name, code, category: mapped.category || "", brand: mapped.brand || "",
+          size: mapped.size || "", uom: mapped.uom || "sqrft", price, gst,
+          stock: toNumber(mapped.stock, 0), dealerPrice: toNumber(mapped.dealerPrice, 0),
+          contractorPrice: toNumber(mapped.contractorPrice, 0), purchasePrice: toNumber(mapped.purchasePrice, 0),
+          minimumSellPrice: toNumber(mapped.minimumSellPrice, 0), stockBoxes: toNumber(mapped.stockBoxes, 0),
+          coverageArea: toNumber(mapped.coverageArea, 0), hsnCode: mapped.hsnCode || "",
+          rackLocation: mapped.rackLocation || "", notes: mapped.notes || "",
+          totalPrice: Number((price*(1+gst/100)).toFixed(2)), isSupplierItem: false };
+      }).filter(Boolean);
+      if (!payloads.length) { toast.error("Required fields missing. Ensure file has Name and Code columns."); return; }
+      const results = await Promise.allSettled(payloads.map((p) => createProduct(p)));
       const success = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.length - success;
+      const failed  = results.length - success;
       await fetchProducts();
       if (failed > 0) toast.success(`Imported ${success}, skipped ${failed}`);
       else toast.success(`Imported ${success} product(s)`);
-    } catch {
-      toast.error("Import failed. Use CSV with header row.");
-    } finally {
-      setImporting(false);
-    }
+    } catch { toast.error("Import failed. Use CSV with header row."); }
+    finally { setImporting(false); }
   };
 
+  /* ── Shared select style ── */
   const selStyle = {
-    padding: "5px 10px",
-    border: `1.5px solid ${T.border}`,
-    borderRadius: "7px",
-    fontFamily: "'Noto Sans', sans-serif",
-    fontSize: 12,
-    color: T.text,
-    background: T.white,
-    outline: "none",
-    cursor: "pointer",
-    height: 32,
+    padding: "5px 10px", border: `1.5px solid ${T.border}`, borderRadius: 0,
+    fontFamily: "'Noto Sans', sans-serif", fontSize: 12, color: T.text,
+    background: T.white, outline: "none", cursor: "pointer", height: 32,
   };
 
-  /* ── Table column definitions ── */
-  const COL_WIDTHS = "50px 1.4fr 100px 80px 65px 80px 95px 95px 80px 90px 55px 90px";
+  const COL_WIDTHS = "50px 1.4fr 100px 80px 65px 80px 90px 95px 95px 80px 90px 55px 90px";
 
   const TH = ({ children, align = "left" }) => (
-    <Typography sx={{
-      fontSize: 11, fontWeight: 700, color: T.muted,
-      textTransform: "uppercase", letterSpacing: ".6px",
-      textAlign: align,
-    }}>
+    <Typography sx={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: ".6px", textAlign: align }}>
       {children}
     </Typography>
   );
 
-  /* ── Stock status badge ── */
-  const StockBadge = ({ stock, reorder }) => {
-    const isLow = Number(stock || 0) < Math.max(Number(reorder || 0), 10);
-    return (
-      <Box sx={{
-        display: "inline-flex", alignItems: "center", gap: "5px",
-        px: "10px", py: "4px", borderRadius: "20px",
-        background: isLow ? "#fff1f0" : "#f0faf4",
-        border: `1px solid ${isLow ? "#fca5a5" : "#6ee7b7"}`,
-        fontSize: 11, fontWeight: 700,
-        color: isLow ? T.danger : T.success,
-        whiteSpace: "nowrap",
-      }}>
-        {isLow ? "⚠" : "✓"} {isLow ? "Low" : "OK"}
-      </Box>
-    );
-  };
-
-  /* ── Table row ── */
-  const TableRow = ({ p, idx }) => {
+  const ProductRow = ({ p, idx }) => {
     const totalPrice = Number(p.totalPrice ?? calcTotalPrice(p.price, p.gst));
     const catStyle   = getCategoryStyle(p.category);
     const stock      = Number(p.stock || 0);
@@ -559,63 +456,47 @@ const ProductDetails = () => {
       <Box
         onClick={() => setViewProduct(p)}
         sx={{
-          display: "grid",
-          gridTemplateColumns: COL_WIDTHS,
-          gap: "6px",
-          alignItems: "center",
-          px: 2,
-          py: "9px",
+          display: "grid", gridTemplateColumns: COL_WIDTHS, gap: "6px",
+          alignItems: "center", px: 2, py: "8px",
           borderBottom: `1px solid ${T.border}`,
-          background: idx % 2 === 0 ? T.white : "#fafbfd",
-          cursor: "pointer",
-          transition: "background .12s",
-          "&:hover": { background: "#f0f6ff" },
+          background: idx % 2 === 0 ? T.white : "#f7fafd",
+          cursor: "pointer", transition: "background .12s",
+          "&:hover": { background: "#e8f0fb" },
         }}
       >
         {/* SKU */}
-        <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, fontFamily: "'DM Mono', monospace" }}>
+        <Typography sx={{ fontSize: 10, fontWeight: 700, color: T.muted, fontFamily: "monospace" }}>
           {p.code || "—"}
         </Typography>
 
-        {/* Tile Name */}
+        {/* Name + Brand */}
         <Box>
-          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, lineHeight: 1.3 }}>
-            {p.name}
-          </Typography>
-          {p.brand && (
-            <Typography sx={{ fontSize: 10, color: T.muted, mt: 0.1 }}>
-              {p.brand}
-            </Typography>
-          )}
+          <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, lineHeight: 1.3 }}>{p.name}</Typography>
+          {p.brand && <Typography sx={{ fontSize: 10, color: T.muted, mt: 0.1 }}>{p.brand}</Typography>}
         </Box>
 
         {/* Category */}
         <Box>
-          {p.category ? (
-            <Box sx={{
-              display: "inline-block", px: "6px", py: "2px", borderRadius: "4px",
-              background: catStyle.bg, color: catStyle.color,
-              fontSize: 10, fontWeight: 700,
-            }}>
-              {p.category}
-            </Box>
-          ) : <Typography sx={{ fontSize: 11, color: T.muted }}>—</Typography>}
+          {p.category
+            ? <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: catStyle.bg, color: catStyle.color, fontSize: 10, fontWeight: 700 }}>{p.category}</Box>
+            : <Typography sx={{ fontSize: 11, color: T.muted }}>—</Typography>}
         </Box>
 
         {/* Brand */}
-        <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 500 }}>
-          {p.brand || "—"}
-        </Typography>
+        <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 500 }}>{p.brand || "—"}</Typography>
 
         {/* Size */}
-        <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 600 }}>
-          {p.size || "—"}
-        </Typography>
+        <Typography sx={{ fontSize: 11, color: T.dark, fontWeight: 600 }}>{p.size || "—"}</Typography>
 
-        {/* Finish */}
-        <Typography sx={{ fontSize: 11, color: T.muted }}>
-          {p.finish || p.rackLocation || "—"}
-        </Typography>
+        {/* Finish / Rack */}
+        <Typography sx={{ fontSize: 11, color: T.muted }}>{p.finish || p.rackLocation || "—"}</Typography>
+
+        {/* Source */}
+        <Box>
+          {p.isSupplierItem
+            ? <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: "#fef3c7", color: "#92400e", fontSize: 10, fontWeight: 700 }}>Supplier</Box>
+            : <Box sx={{ display: "inline-block", px: "6px", py: "2px", background: "#e0f2fe", color: "#075985", fontSize: 10, fontWeight: 700 }}>Own</Box>}
+        </Box>
 
         {/* Retail Price */}
         <Typography sx={{ fontSize: 12, fontWeight: 700, color: T.dark, fontFamily: "'Rajdhani', sans-serif" }}>
@@ -632,12 +513,8 @@ const ProductDetails = () => {
           {p.purchasePrice > 0 ? fmtPrice(p.purchasePrice) : "—"}
         </Typography>
 
-        {/* Stock (sqft) */}
-        <Typography sx={{
-          fontSize: 12, fontWeight: 700,
-          color: isLow ? T.danger : T.dark,
-          fontFamily: "'Rajdhani', sans-serif",
-        }}>
+        {/* Stock sqft */}
+        <Typography sx={{ fontSize: 12, fontWeight: 700, color: isLow ? T.danger : T.dark, fontFamily: "'Rajdhani', sans-serif" }}>
           {fmt(stock)} sqft
         </Typography>
 
@@ -650,29 +527,13 @@ const ProductDetails = () => {
         <Box onClick={(e) => e.stopPropagation()} sx={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-start" }}>
           <Box
             onClick={(e) => { e.stopPropagation(); navigate('/products/add', { state: { editProduct: p } }); }}
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: "3px",
-              px: "7px", py: "2px", borderRadius: "4px",
-              border: `1px solid ${T.border}`, cursor: "pointer",
-              fontSize: 10, fontWeight: 600, color: T.primary,
-              background: T.white,
-              "&:hover": { background: T.primaryLight, borderColor: T.primary },
-              transition: "all .12s",
-            }}
+            sx={{ display: "inline-flex", alignItems: "center", gap: "3px", px: "7px", py: "2px", border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 10, fontWeight: 600, color: T.primary, background: T.white, "&:hover": { background: T.primaryLight, borderColor: T.primary }, transition: "all .12s" }}
           >
             <EditIcon sx={{ fontSize: 10 }} /> Edit
           </Box>
           <Box
             onClick={(e) => { e.stopPropagation(); askDelete(p._id, p.name); }}
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: "3px",
-              px: "7px", py: "2px", borderRadius: "4px",
-              border: `1px solid ${T.border}`, cursor: "pointer",
-              fontSize: 10, fontWeight: 600, color: T.danger,
-              background: T.white,
-              "&:hover": { background: T.dangerLight, borderColor: T.danger },
-              transition: "all .12s",
-            }}
+            sx={{ display: "inline-flex", alignItems: "center", gap: "3px", px: "7px", py: "2px", border: `1px solid ${T.border}`, cursor: "pointer", fontSize: 10, fontWeight: 600, color: T.danger, background: T.white, "&:hover": { background: T.dangerLight, borderColor: T.danger }, transition: "all .12s" }}
           >
             <DeleteIcon sx={{ fontSize: 10 }} /> Delete
           </Box>
@@ -688,93 +549,127 @@ const ProductDetails = () => {
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1.5 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
           <Box sx={{ fontSize: 22 }}>🧱</Box>
-          <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.dark }}>
-            Tile Stock Register
-          </Typography>
+          <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.dark }}>Tile Stock Register</Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1 }}>
-          <Box
-            onClick={handleImportClick}
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              px: 2, py: 1, borderRadius: "8px",
-              border: `1.5px solid ${T.border}`, cursor: "pointer",
-              fontSize: 13, fontWeight: 600, color: T.text, background: T.white,
-              "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight },
-              transition: "all .13s",
-            }}
-          >
-            <UploadFileIcon sx={{ fontSize: 16 }} /> {importing ? "Importing..." : "Import"}
+          <Box onClick={() => importInputRef.current?.click()}
+            sx={{ display: "inline-flex", alignItems: "center", gap: "6px", px: 2, py: 1, border: `1.5px solid ${T.border}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: T.text, background: T.white, "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight }, transition: "all .13s" }}>
+            <FileUploadOutlinedIcon sx={{ fontSize: 16 }} /> {importing ? "Importing..." : "Import"}
           </Box>
           <input ref={importInputRef} type="file" accept=".csv,text/csv" hidden onChange={handleImportFile} />
-          <Box
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              px: 2, py: 1, borderRadius: "8px",
-              border: `1.5px solid ${T.border}`, cursor: "pointer",
-              fontSize: 13, fontWeight: 600, color: T.text, background: T.white,
-              "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight },
-              transition: "all .13s",
-            }}
-          >
-            <FileDownloadIcon sx={{ fontSize: 16 }} /> Export
+          <Box onClick={handleExport}
+            sx={{ display: "inline-flex", alignItems: "center", gap: "6px", px: 2, py: 1, border: `1.5px solid ${T.border}`, cursor: "pointer", fontSize: 13, fontWeight: 600, color: T.text, background: T.white, "&:hover": { borderColor: T.primary, color: T.primary, background: T.primaryLight }, transition: "all .13s" }}>
+            <FileDownloadOutlinedIcon sx={{ fontSize: 16 }} /> Export
           </Box>
-          <Box
-            onClick={() => navigate('/products/add')}
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: "6px",
-              px: 2.5, py: 1, borderRadius: "8px",
-              background: T.primary, cursor: "pointer",
-              fontSize: 13, fontWeight: 700, color: "#fff",
-              "&:hover": { background: T.primaryDark },
-              transition: "background .13s",
-            }}
-          >
+          <Box onClick={() => navigate('/products/add')}
+            sx={{ display: "inline-flex", alignItems: "center", gap: "6px", px: 2.5, py: 1, background: T.primary, cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", "&:hover": { background: T.primaryDark }, transition: "background .13s" }}>
             <AddIcon sx={{ fontSize: 16 }} /> Add Tile
           </Box>
         </Box>
       </Box>
 
+      {/* ── Summary cards ── */}
+      {(() => {
+        const ownCount      = products.filter((p) => !p.isSupplierItem).length;
+        const supplierCount = products.filter((p) =>  p.isSupplierItem).length;
+        const cards = [
+          {
+            label: "Total Products",
+            val: products.length,
+            sub: "All inventory items",
+            icon: "📦",
+            accent: T.primary,
+            bg: "#edf4ff",
+            borderColor: "#bfd6f6",
+          },
+          {
+            label: "Own Products",
+            val: ownCount,
+            sub: "In-house stock",
+            icon: "🏬",
+            accent: "#0369a1",
+            bg: "#e0f2fe",
+            borderColor: "#7dd3fc",
+          },
+          {
+            label: "Supplier Products",
+            val: supplierCount,
+            sub: "Sourced externally",
+            icon: "🚚",
+            accent: "#92400e",
+            bg: "#fef3c7",
+            borderColor: "#fcd34d",
+          },
+          {
+            label: "Low Stock",
+            val: lowStock,
+            sub: lowStock > 0 ? "Need restock" : "All stocked up",
+            icon: lowStock > 0 ? "⚠️" : "✅",
+            accent: lowStock > 0 ? T.danger : T.success,
+            bg: lowStock > 0 ? "#fff1f0" : "#f0faf4",
+            borderColor: lowStock > 0 ? "#fca5a5" : "#6ee7b7",
+          },
+        ];
+        return (
+          <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1.5, mb: 2 }}>
+            {cards.map((c) => (
+              <Box key={c.label} sx={{
+                background: c.bg,
+                border: `1.5px solid ${c.borderColor}`,
+                px: 2.5, py: 2,
+                display: "flex", alignItems: "center", gap: 2,
+                position: "relative", overflow: "hidden",
+              }}>
+                {/* Left accent bar */}
+                <Box sx={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: c.accent }} />
+                {/* Icon */}
+                <Box sx={{ fontSize: 28, lineHeight: 1, flexShrink: 0 }}>{c.icon}</Box>
+                {/* Text */}
+                <Box>
+                  <Typography sx={{ fontSize: 32, fontWeight: 900, color: c.accent, lineHeight: 1, fontFamily: "'Rajdhani', sans-serif" }}>
+                    {c.val}
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: c.accent, lineHeight: 1.2, mt: 0.2 }}>
+                    {c.label}
+                  </Typography>
+                  <Typography sx={{ fontSize: 10, color: c.accent, opacity: 0.65, mt: 0.3, fontWeight: 500 }}>
+                    {c.sub}
+                  </Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        );
+      })()}
+
       {/* ── Filters bar ── */}
-      <Box sx={{
-        display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap",
-        mb: 1.5,
-      }}>
-        {/* Search */}
-        <Box sx={{ position: "relative" }}>
+      <Box sx={{ display: "flex", gap: 1, alignItems: "center", flexWrap: "wrap", mb: 1.5, p: 1.2, background: T.white, border: `1px solid ${T.border}` }}>
+        <Box sx={{ position: "relative", "& input::placeholder": { color: "#c0cad8", opacity: 1 } }}>
           <Box sx={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: T.muted, pointerEvents: "none", display: "flex" }}>
             <SearchIcon sx={{ fontSize: 16 }} />
           </Box>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tile, SKU, brand..."
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tile, SKU, brand..."
             style={{ ...selStyle, paddingLeft: 32, minWidth: 220 }}
             onFocus={(e) => { e.target.style.borderColor = T.primary; }}
-            onBlur={(e)  => { e.target.style.borderColor = T.border; }}
-          />
+            onBlur={(e)  => { e.target.style.borderColor = T.border; }} />
         </Box>
 
-        {/* Category filter */}
         <select style={selStyle} value={categoryF} onChange={(e) => setCategoryF(e.target.value)}>
           <option value="all">All Categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
 
-        {/* Brand filter */}
         <select style={selStyle} value={brandF} onChange={(e) => setBrandF(e.target.value)}>
           <option value="all">All Brands</option>
           {brands.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
-        {/* Stock filter */}
         <select style={selStyle} value={stockF} onChange={(e) => setStockF(e.target.value)}>
           <option value="all">All Stock</option>
           <option value="low">Low Stock</option>
           <option value="ok">In Stock</option>
         </select>
 
-        {/* Sort */}
         <select style={selStyle} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
           <option value="name">Sort: Name</option>
           <option value="price_asc">Price ↑</option>
@@ -783,98 +678,74 @@ const ProductDetails = () => {
           <option value="newest">Newest</option>
         </select>
 
-        <Typography sx={{ fontSize: 12, color: T.muted, ml: "auto" }}>
+        {/* Source tabs */}
+        <Box sx={{ display: "flex", border: `1.5px solid ${T.border}`, overflow: "hidden", ml: "auto" }}>
+          {[["all","All"],["own","Own"],["supplier","Supplier"]].map(([val, label]) => (
+            <Box key={val} onClick={() => setTab(val)}
+              sx={{ px: 1.5, py: "4px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+                background: tab === val ? T.primary : T.white,
+                color: tab === val ? "#fff" : T.text,
+                borderRight: val !== "supplier" ? `1px solid ${T.border}` : "none",
+                "&:hover": { background: tab === val ? T.primary : T.primaryLight },
+                transition: "all .12s" }}>
+              {label}
+            </Box>
+          ))}
+        </Box>
+
+        <Typography sx={{ fontSize: 12, color: T.muted }}>
           {filtered.length} of {products.length} product{products.length !== 1 ? "s" : ""}
         </Typography>
       </Box>
 
       {/* ── Table ── */}
-      <Box sx={{
-        background: T.white,
-        borderRadius: "12px",
-        border: `1px solid ${T.border}`,
-        boxShadow: "0 1px 4px rgba(0,0,0,.05)",
-        overflow: "hidden",
-      }}>
-        {/* Table header */}
-        <Box sx={{
-          display: "grid",
-          gridTemplateColumns: COL_WIDTHS,
-          gap: "6px",
-          px: 2,
-          py: "9px",
-          background: "#f8fafc",
-          borderBottom: `2px solid ${T.border}`,
-        }}>
-          <TH>SKU</TH>
-          <TH>Tile Name</TH>
-          <TH>Category</TH>
-          <TH>Brand</TH>
-          <TH>Size</TH>
-          <TH>Finish</TH>
-          <TH>Retail Price</TH>
-          <TH>Dealer Price</TH>
-          <TH>Cost Price</TH>
-          <TH>Stock(sqft)</TH>
-          <TH align="center">Boxes</TH>
-          <TH>Actions</TH>
+      <Box sx={{ background: T.white, border: `1px solid ${T.border}`, boxShadow: "0 1px 4px rgba(0,0,0,.04)", overflow: "hidden" }}>
+        {/* Header */}
+        <Box sx={{ display: "grid", gridTemplateColumns: COL_WIDTHS, gap: "6px", px: 2, py: "10px", background: T.primary, borderBottom: `2px solid ${T.primaryDark}` }}>
+          <TH>SKU</TH><TH>Tile Name</TH><TH>Category</TH><TH>Brand</TH>
+          <TH>Size</TH><TH>Finish</TH><TH>Source</TH><TH>Retail Price</TH>
+          <TH>Dealer Price</TH><TH>Cost Price</TH><TH>Stock(sqft)</TH>
+          <TH align="center">Boxes</TH><TH>Actions</TH>
         </Box>
 
-        {/* Table body */}
+        {/* Body */}
         {loading ? (
-          <Box sx={{ p: 6, textAlign: "center", color: T.muted, fontSize: 13 }}>
-            Loading products...
-          </Box>
+          <Box sx={{ p: 6, textAlign: "center", color: T.muted, fontSize: 13 }}>Loading products...</Box>
         ) : filtered.length === 0 ? (
           <Box sx={{ p: 8, textAlign: "center" }}>
             <Box sx={{ fontSize: 44, mb: 2, opacity: 0.15 }}>🧱</Box>
             <Typography sx={{ color: T.muted, fontSize: 13 }}>No products match your filters</Typography>
           </Box>
         ) : (
-          filtered.map((p, idx) => (
-            <TableRow key={p._id} p={p} idx={idx} />
-          ))
+          filtered.map((p, idx) => <ProductRow key={p._id} p={p} idx={idx} />)
         )}
 
-        {/* Footer summary */}
+        {/* Footer */}
         {!loading && filtered.length > 0 && (
-          <Box sx={{
-            px: 2, py: 1.2,
-            borderTop: `2px solid ${T.border}`,
-            background: "#f8fafc",
-            display: "flex", gap: 3, alignItems: "center",
-          }}>
+          <Box sx={{ px: 2, py: 1.2, borderTop: `2px solid ${T.border}`, background: "#f8fafc", display: "flex", gap: 3, alignItems: "center" }}>
             <Typography sx={{ fontSize: 12, color: T.muted }}>
               <Box component="span" sx={{ fontWeight: 700, color: T.dark }}>{filtered.length}</Box> products shown
             </Typography>
             {lowStock > 0 && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <Box sx={{ width: 7, height: 7, borderRadius: "50%", background: T.danger }} />
-                <Typography sx={{ fontSize: 12, color: T.danger, fontWeight: 600 }}>
-                  {lowStock} low stock
-                </Typography>
+                <Box sx={{ width: 7, height: 7, background: T.danger }} />
+                <Typography sx={{ fontSize: 12, color: T.danger, fontWeight: 600 }}>{lowStock} low stock</Typography>
               </Box>
             )}
           </Box>
         )}
       </Box>
 
-      <ViewDialog
-        product={viewProduct}
-        open={!!viewProduct}
-        onClose={() => setViewProduct(null)}
-        onEdit={(p) => { setViewProduct(null); navigate('/products/add', { state: { editProduct: p } }); }}
-      />
+      <ViewDialog product={viewProduct} open={!!viewProduct} onClose={() => setViewProduct(null)}
+        onEdit={(p) => { setViewProduct(null); navigate('/products/add', { state: { editProduct: p } }); }} />
 
-      <ConfirmDialog
-        open={confirmDelete.open}
-        title="Delete Product"
+      <EditDialog product={editProduct} open={!!editProduct} onClose={() => setEditProduct(null)} onSaved={fetchProducts} />
+
+      <ConfirmDialog open={confirmDelete.open} title="Delete Product"
         message={`Are you sure you want to delete "${confirmDelete.name}"?`}
-        confirmText="Delete"
-        danger
+        confirmText="Delete" danger
         onClose={() => setConfirmDelete({ open: false, id: "", name: "" })}
-        onConfirm={handleDelete}
-      />
+        onConfirm={handleDelete} />
     </Box>
   );
 };

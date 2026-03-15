@@ -4,7 +4,7 @@ const {
   createInvoice,
   getAllInvoices,
   deleteInvoice,
-  updateInvoiceStatus,
+  updateInvoice,
   finalizeInvoiceStock,
 } = require("../controllers/invoiceController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
@@ -15,7 +15,7 @@ router.get("/", protect, getAllInvoices);
 router.post("/:id/finalize-stock", protect, finalizeInvoiceStock);
 
 // ✅ Admin only — staff cannot edit or delete invoices
-router.put("/:id", protect, adminOnly, updateInvoiceStatus);
+router.put("/:id", protect, adminOnly, updateInvoice);
 router.delete("/:id", protect, adminOnly, deleteInvoice);
 
 module.exports = router;

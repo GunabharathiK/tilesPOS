@@ -96,7 +96,7 @@ const Layout = () => {
           sx={{
             width: "100%",
             minHeight: "100vh",
-            p: "20px",
+            p: 0,
             boxSizing: "border-box",
           }}
         >

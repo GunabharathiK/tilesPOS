@@ -6,5 +6,11 @@ export const saveCustomer = (data) =>
 export const getCustomers = () =>
   API.get("/customers");
 
+export const updateCustomer = (id, data) =>
+  API.put(`/customers/${id}`, data);
+
+export const deleteCustomer = (id) =>
+  API.delete(`/customers/${id}`);
+
 export const getCustomerInvoices = () =>
   API.get("/invoices");

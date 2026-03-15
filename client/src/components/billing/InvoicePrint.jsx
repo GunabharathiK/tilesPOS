@@ -6,7 +6,7 @@ const InvoicePrint = ({ data }) => {
     items = [],
     invoiceNo,
     date,
-    company = "Renix Software",
+    company = "",
     tax = 0,
     discount = 0,
     charges = {},
@@ -49,22 +49,47 @@ const InvoicePrint = ({ data }) => {
     "";
   const hasBankDetails = isBusinessCustomer && (customerBankAccountNo || customerIfscCode || customerAccountHolder);
 
-  // Read from shopSettings (saved by Settings.jsx)
-  const shopSettings = (() => {
+  // Read from Settings storage and saved company snapshot, then merge.
+  const storedShopSettings = (() => {
     try { return JSON.parse(localStorage.getItem("shopSettings")) || {}; } catch { return {}; }
   })();
+  const savedCompanySettings = (() => {
+    try { return JSON.parse(localStorage.getItem("settingsSavedRecords"))?.company?.data || {}; } catch { return {}; }
+  })();
+  const billFormatSettings = (() => {
+    try { return JSON.parse(localStorage.getItem("billFormat")) || {}; } catch { return {}; }
+  })();
+  const firstFilled = (...values) => {
+    for (const value of values) {
+      const text = String(value ?? "").trim();
+      if (text) return text;
+    }
+    return "";
+  };
 
-  const shopName    = shopSettings.shopName    || company;
-  const shopAddress = shopSettings.address     || "";
-  const shopPhone   = shopSettings.phone       || "";
-  const shopEmail   = shopSettings.email       || "";
-  const shopGstin   = shopSettings.gstNumber   || "";
-  const shopLogo    = shopSettings.logo        || "";
-  const shopUpi     = shopSettings.upiId       || "";
-  const shopBank    = shopSettings.bankName    || "";
-  const shopAccount = shopSettings.accountNumber || "";
-  const shopTerms   = shopSettings.termsAndConditions || "";
-  const shopFooter  = "Thank you for your business!";
+  const shopName    = firstFilled(storedShopSettings.shopName, savedCompanySettings.shopName, billFormatSettings.shopName, company);
+  const shopOwner   = firstFilled(storedShopSettings.ownerName, savedCompanySettings.ownerName);
+  const shopAddress = firstFilled(storedShopSettings.address, savedCompanySettings.address, billFormatSettings.address);
+  const shopState   = firstFilled(storedShopSettings.state, savedCompanySettings.state);
+  const shopPhone   = firstFilled(storedShopSettings.phone, savedCompanySettings.phone);
+  const shopEmail   = firstFilled(storedShopSettings.email, savedCompanySettings.email);
+  const shopGstin   = firstFilled(storedShopSettings.gstNumber, savedCompanySettings.gstNumber, billFormatSettings.gst);
+  const shopLogo    = firstFilled(storedShopSettings.logo, savedCompanySettings.logo, billFormatSettings.logo);
+  const shopUpi     = firstFilled(storedShopSettings.upiId, savedCompanySettings.upiId);
+  const shopBank    = firstFilled(storedShopSettings.bankName);
+  const shopAccount = firstFilled(storedShopSettings.accountNumber);
+  const shopTerms   = firstFilled(storedShopSettings.termsAndConditions);
+  const shopFooter  = firstFilled(billFormatSettings.footer, "Thank you for your business!");
+  const shopAddressLine = [shopAddress, shopState].filter(Boolean).join(", ");
+  const companyProfileRows = [
+    ["Shop Name", shopName],
+    ["Owner Name", shopOwner],
+    ["Mobile", shopPhone],
+    ["Email", shopEmail],
+    ["Address", shopAddress],
+    ["State", shopState],
+    ["GSTIN", shopGstin],
+  ].filter(([, value]) => String(value || "").trim());
 
   const baseAmount = items.reduce((acc, i) => acc + Number(i.quantity || 0) * Number(i.price || 0), 0);
   const totalItems = items.reduce((acc, i) => acc + (Number(i.quantity) || 0), 0);
@@ -141,32 +166,31 @@ const InvoicePrint = ({ data }) => {
           alignItems: "flex-start",
           gap: 2,
         }}
-      >
-        {/* Left: company info */}
-        <Box>
-          {shopLogo && (
-            <img src={shopLogo} alt="logo" style={{ height: 52, marginBottom: 8, objectFit: "contain" }} />
-          )}
-          <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-0.02em" }}>
-            {shopName}
-          </Typography>
-          {shopAddress && (
-            <Typography sx={{ fontSize: 12, color: "#64748b", mt: 0.4, maxWidth: 300, lineHeight: 1.5 }}>
-              {shopAddress}
-            </Typography>
-          )}
-          {shopPhone && (
-            <Typography sx={{ fontSize: 12, color: "#475569", mt: 0.3 }}>
-              📞 {shopPhone}{shopEmail ? `  ·  ${shopEmail}` : ""}
-            </Typography>
-          )}
-          {shopGstin && (
-            <Typography sx={{ fontSize: 12, color: "#475569", mt: 0.3 }}>
-              <Box component="span" sx={{ fontWeight: 700 }}>GSTIN: </Box>
-              <Box component="span" sx={{ fontFamily: "monospace" }}>{shopGstin}</Box>
-            </Typography>
-          )}
-        </Box>
+        >
+          {/* Left: company info */}
+          <Box>
+            {shopLogo && (
+              <img src={shopLogo} alt="logo" style={{ height: 52, marginBottom: 8, objectFit: "contain" }} />
+            )}
+            {companyProfileRows.length > 0 ? (
+              <Box sx={{ mt: 0.2, display: "grid", gap: 0.45, maxWidth: 370 }}>
+                {companyProfileRows.map(([label, value], idx) => (
+                  <Box key={label} sx={{ display: "grid", gridTemplateColumns: "92px 1fr", gap: 1 }}>
+                    <Typography sx={{ fontSize: idx === 0 ? 12.5 : 11.5, fontWeight: idx === 0 ? 800 : 700, color: idx === 0 ? "#0f172a" : "#64748b" }}>
+                      {label}
+                    </Typography>
+                    <Typography sx={{ fontSize: idx === 0 ? 21 : 11.8, fontWeight: idx === 0 ? 900 : 600, color: idx === 0 ? "#0f172a" : "#334155", lineHeight: idx === 0 ? 1.1 : 1.45, fontFamily: label === "GSTIN" ? "monospace" : "inherit" }}>
+                      {value}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                {shopName || "Company"}
+              </Typography>
+            )}
+          </Box>
 
         {/* Right: document type + invoice meta */}
         <Box sx={{ textAlign: "right" }}>
@@ -528,7 +552,9 @@ const InvoicePrint = ({ data }) => {
         {/* Bottom bar */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography sx={{ fontSize: 11, color: "#94a3b8" }}>
-            {shopName}{shopAddress ? ` · ${shopAddress}` : ""}
+            {shopName}
+            {shopOwner ? ` · ${shopOwner}` : ""}
+            {shopAddressLine ? ` · ${shopAddressLine}` : ""}
           </Typography>
           <Typography sx={{ fontSize: 12, fontWeight: 600, color: "#64748b", fontStyle: "italic" }}>
             {shopFooter}

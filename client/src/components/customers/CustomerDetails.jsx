@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Box,
-  Card,
   Typography,
-  Chip,
   Table,
   TableHead,
   TableBody,
   TableRow,
   TableCell,
-  Button,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -19,8 +16,6 @@ import {
   IconButton,
   Collapse,
   InputAdornment,
-  Tabs,
-  Tab,
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -35,75 +30,105 @@ import { saveCustomer, getCustomers } from "../../services/customerService";
 import { formatCurrency, getInvoicePaymentMetrics, groupInvoicesByCustomer } from "../../utils/invoiceMetrics";
 import ConfirmDialog from "../common/ConfirmDialog";
 
+/* ── Constants ── */
 const TYPE_SECTIONS = [
-  { key: "Retail Customer", title: "Retail Customers", color: "#2563eb", bg: "#eff6ff" },
-  { key: "Dealer", title: "Dealers", color: "#0891b2", bg: "#ecfeff" },
-  { key: "Contractor", title: "Contractors", color: "#7c3aed", bg: "#f5f3ff" },
+  { key: "Retail Customer",   title: "Retail Customers", color: "#2563eb", bg: "#eff6ff" },
+  { key: "Dealer",            title: "Dealers",          color: "#0891b2", bg: "#ecfeff" },
+  { key: "Contractor",        title: "Contractors",      color: "#7c3aed", bg: "#f5f3ff" },
   { key: "Builder / Project", title: "Builder / Projects", color: "#d97706", bg: "#fffbeb" },
 ];
 
 const normalizeCustomerType = (value) => {
-  if (value === "Dealer" || value === "Wholesale") return "Dealer";
-  if (value === "Contractor" || value === "B2B") return "Contractor";
-  if (value === "Builder / Project") return "Builder / Project";
+  if (value === "Dealer"   || value === "Wholesale") return "Dealer";
+  if (value === "Contractor" || value === "B2B")     return "Contractor";
+  if (value === "Builder / Project")                 return "Builder / Project";
   return "Retail Customer";
 };
 
-const statusConfig = {
-  Paid: { color: "#166534", bg: "#dcfce7", border: "#bbf7d0" },
-  Partial: { color: "#92400e", bg: "#fef3c7", border: "#fde68a" },
-  Pending: { color: "#991b1b", bg: "#fee2e2", border: "#fecaca" },
+/* ── Design tokens ── */
+const T = {
+  primary:      "#1a56a0",
+  primaryDark:  "#0f3d7a",
+  primaryLight: "#eef4fd",
+  dark:         "#0f172a",
+  text:         "#1e293b",
+  muted:        "#64748b",
+  faint:        "#94a3b8",
+  border:       "#dde3ed",
+  borderLight:  "#e8eef6",
+  bg:           "#f1f5f9",
+  surface:      "#ffffff",
+  surfaceAlt:   "#f8fafc",
+  success:      "#15803d",
+  successLight: "#f0fdf4",
+  danger:       "#b91c1c",
+  dangerLight:  "#fef2f2",
+  warning:      "#92400e",
+  warningLight: "#fef3c7",
+};
+
+/* ── Status badge ── */
+const statusCfg = {
+  Paid:    { color: T.success, bg: T.successLight, border: "#bbf7d0" },
+  Partial: { color: T.warning, bg: T.warningLight, border: "#fde68a" },
+  Pending: { color: T.danger,  bg: T.dangerLight,  border: "#fecaca" },
 };
 
 const StatusChip = ({ status }) => {
-  const cfg = statusConfig[status] || statusConfig.Pending;
+  const cfg = statusCfg[status] || statusCfg.Pending;
   return (
-    <Box
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        px: 1.2,
-        py: 0.3,
-        borderRadius: "6px",
-        fontSize: 11,
-        fontWeight: 700,
-        color: cfg.color,
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
-        letterSpacing: "0.03em",
-      }}
-    >
+    <Box sx={{
+      display: "inline-flex", alignItems: "center",
+      px: 1.2, py: "3px",
+      fontSize: 11, fontWeight: 700,
+      color: cfg.color, background: cfg.bg,
+      border: `1px solid ${cfg.border}`,
+      letterSpacing: ".03em",
+      borderRadius: 0,
+    }}>
       {status}
     </Box>
   );
 };
 
-// ─── Dialogs ────────────────────────────────────────────────────────────────
-
-const dialogSx = {
-  "& .MuiDialog-paper": {
-    borderRadius: "16px",
-    boxShadow: "0 24px 64px rgba(0,0,0,0.14)",
-  },
-};
-
+/* ── Shared input style — zero radius ── */
 const inputSx = {
   "& .MuiOutlinedInput-root": {
-    borderRadius: "10px",
+    borderRadius: 0,
     fontSize: 13,
-    "& fieldset": { borderColor: "#dbe5f0" },
-    "&:hover fieldset": { borderColor: "#94a3b8" },
-    "&.Mui-focused fieldset": { borderColor: "#1a56a0", borderWidth: 2 },
+    background: T.surface,
+    "& fieldset": { borderColor: T.border },
+    "&:hover fieldset": { borderColor: T.primary },
+    "&.Mui-focused fieldset": { borderColor: T.primary, borderWidth: 1.5 },
+    "&.Mui-focused": { boxShadow: `0 0 0 3px rgba(26,86,160,.08)` },
   },
-  "& .MuiInputLabel-root": { fontSize: 13 },
-  "& .MuiInputLabel-root.Mui-focused": { color: "#1a56a0" },
+  "& .MuiInputLabel-root":             { fontSize: 13, color: T.muted },
+  "& .MuiInputLabel-root.Mui-focused": { color: T.primary },
 };
 
+/* ── Action text button ── */
+const ActBtn = ({ label, color, hoverBg, onClick, disabled }) => (
+  <Box
+    onClick={!disabled ? onClick : undefined}
+    sx={{
+      px: "9px", py: "4px",
+      fontSize: 12, fontWeight: 700,
+      color: disabled ? T.faint : color,
+      cursor: disabled ? "default" : "pointer",
+      userSelect: "none",
+      "&:hover": !disabled ? { background: hoverBg } : {},
+      transition: "background .12s",
+    }}>
+    {label}
+  </Box>
+);
+
+/* ─── Payment Dialog ────────────────────────────────────── */
 const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
-  const [paymentType, setPaymentType] = useState("Full Payment");
-  const [method, setMethod] = useState("CASH");
-  const [partialAmount, setPartialAmount] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [paymentType,    setPaymentType]    = useState("Full Payment");
+  const [method,         setMethod]         = useState("CASH");
+  const [partialAmount,  setPartialAmount]  = useState("");
+  const [loading,        setLoading]        = useState(false);
 
   const metrics = useMemo(() => getInvoicePaymentMetrics(invoice || {}), [invoice]);
   const { amount, paidAmount: existingPaid, dueAmount: remaining } = metrics;
@@ -112,7 +137,7 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
     if (!invoice) return;
     setPaymentType(
       invoice?.payment?.paymentType ||
-        (invoice?.status === "Partial" ? "Partial" : invoice?.status === "Paid" ? "Full Payment" : "Pending")
+      (invoice?.status === "Partial" ? "Partial" : invoice?.status === "Paid" ? "Full Payment" : "Pending")
     );
     setMethod(invoice?.payment?.method || "CASH");
     setPartialAmount("");
@@ -129,9 +154,9 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
         return;
       }
     }
-    const newPaid = Math.min(amount, existingPaid + payNow);
-    const newDue = Math.max(0, amount - newPaid);
-    const status = newDue === 0 ? "Paid" : newPaid > 0 ? "Partial" : "Pending";
+    const newPaid   = Math.min(amount, existingPaid + payNow);
+    const newDue    = Math.max(0, amount - newPaid);
+    const status    = newDue === 0 ? "Paid" : newPaid > 0 ? "Partial" : "Pending";
     setLoading(true);
     try {
       await updateInvoice(invoice._id, {
@@ -144,31 +169,39 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
       onClose();
     } catch (err) {
       toast.error(err?.response?.data?.error || "Failed to update payment");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   if (!invoice) return null;
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" sx={dialogSx}>
-      <DialogTitle sx={{ pb: 1, fontWeight: 800, fontSize: 17, fontFamily: "Rajdhani, sans-serif" }}>
-        Update Payment
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: "flex", gap: 2, mb: 2.5, p: 1.5, borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2eaf4" }}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm"
+      PaperProps={{ sx: { borderRadius: 0, boxShadow: "0 24px 64px rgba(0,0,0,.14)" } }}>
+
+      {/* Dialog header */}
+      <Box sx={{ px: 3, py: 2, borderBottom: `2px solid ${T.primary}`, background: `linear-gradient(to right, ${T.primaryLight}, ${T.surface})`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.dark, lineHeight: 1.15 }}>Update Payment</Typography>
+          <Typography sx={{ fontSize: 11, color: T.muted }}>Invoice: {invoice.invoiceNo || "—"}</Typography>
+        </Box>
+        <Box onClick={onClose} sx={{ cursor: "pointer", color: T.faint, fontSize: 18, lineHeight: 1, "&:hover": { color: T.danger } }}>✕</Box>
+      </Box>
+
+      <DialogContent sx={{ p: 2.5 }}>
+        {/* Summary strip */}
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", mb: 2.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
           {[
-            { label: "Invoice", value: invoice.invoiceNo || "-" },
-            { label: "Total", value: `₹${formatCurrency(amount)}` },
+            { label: "Invoice",   value: invoice.invoiceNo || "—" },
+            { label: "Total",     value: `₹${formatCurrency(amount)}` },
             { label: "Remaining", value: `₹${formatCurrency(remaining)}` },
-          ].map((item) => (
-            <Box key={item.label} sx={{ flex: 1, textAlign: "center" }}>
-              <Typography sx={{ fontSize: 10, color: "#718096", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{item.label}</Typography>
-              <Typography sx={{ fontSize: 14, fontWeight: 800, color: "#1c2333", mt: 0.2 }}>{item.value}</Typography>
+          ].map((item, i) => (
+            <Box key={item.label} sx={{ px: 2, py: 1.4, textAlign: "center", borderRight: i < 2 ? `1px solid ${T.border}` : "none", background: T.surfaceAlt }}>
+              <Typography sx={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", mb: 0.4 }}>{item.label}</Typography>
+              <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.dark }}>{item.value}</Typography>
             </Box>
           ))}
         </Box>
+
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <TextField select fullWidth size="small" label="Payment Type" value={paymentType} onChange={(e) => setPaymentType(e.target.value)} sx={inputSx}>
             <MenuItem value="Full Payment">Full Payment</MenuItem>
@@ -186,213 +219,211 @@ const PaymentDialog = ({ invoice, open, onClose, onSaved }) => {
           </TextField>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={onClose} sx={{ textTransform: "none", color: "#64748b", borderRadius: "8px" }}>Cancel</Button>
-        <Button
-          variant="contained"
-          onClick={handleSave}
-          disabled={loading}
-          sx={{ textTransform: "none", borderRadius: "8px", fontWeight: 700, background: "linear-gradient(135deg, #1a56a0, #0f3d7a)", px: 3 }}
-        >
+
+      <Box sx={{ px: 2.5, py: 2, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 1, background: T.surfaceAlt }}>
+        <Box onClick={onClose} sx={{ px: 2.2, py: "8px", fontSize: 13, fontWeight: 600, color: T.muted, cursor: "pointer", border: `1px solid ${T.border}`, "&:hover": { borderColor: T.danger, color: T.danger }, transition: "all .12s", userSelect: "none" }}>
+          Cancel
+        </Box>
+        <Box onClick={!loading ? handleSave : undefined} sx={{ px: 2.8, py: "8px", fontSize: 13, fontWeight: 700, color: "#fff", cursor: loading ? "default" : "pointer", background: loading ? T.faint : `linear-gradient(135deg, ${T.primary}, ${T.primaryDark})`, boxShadow: loading ? "none" : "0 4px 14px rgba(26,86,160,.28)", "&:hover": !loading ? { filter: "brightness(1.08)" } : {}, transition: "all .12s", userSelect: "none" }}>
           {loading ? "Saving..." : "Save Payment"}
-        </Button>
-      </DialogActions>
+        </Box>
+      </Box>
     </Dialog>
   );
 };
 
+/* ─── Invoice View Dialog ───────────────────────────────── */
 const InvoiceViewDialog = ({ invoice, open, onClose }) => {
   if (!invoice) return null;
   const metrics = getInvoicePaymentMetrics(invoice);
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" sx={dialogSx}>
-      <DialogTitle sx={{ pb: 1, fontWeight: 800, fontSize: 17, fontFamily: "Rajdhani, sans-serif" }}>
-        Invoice — {invoice.invoiceNo || "-"}
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 1.2, mb: 2.5, p: 1.5, borderRadius: "10px", background: "#f8fafc", border: "1px solid #e2eaf4" }}>
+    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md"
+      PaperProps={{ sx: { borderRadius: 0, boxShadow: "0 24px 64px rgba(0,0,0,.14)" } }}>
+
+      <Box sx={{ px: 3, py: 2, borderBottom: `2px solid ${T.primary}`, background: `linear-gradient(to right, ${T.primaryLight}, ${T.surface})`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          <Typography sx={{ fontSize: 15, fontWeight: 800, color: T.dark, lineHeight: 1.15 }}>Invoice Details</Typography>
+          <Typography sx={{ fontSize: 11, color: T.muted }}>{invoice.invoiceNo || "—"}</Typography>
+        </Box>
+        <Box onClick={onClose} sx={{ cursor: "pointer", color: T.faint, fontSize: 18, lineHeight: 1, "&:hover": { color: T.danger } }}>✕</Box>
+      </Box>
+
+      <DialogContent sx={{ p: 2.5 }}>
+        {/* Meta grid */}
+        <Box sx={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", mb: 2.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
           {[
-            { label: "Customer", value: invoice?.customer?.name || "-" },
-            { label: "Mobile", value: invoice?.customer?.phone || "-" },
-            { label: "Date", value: invoice?.date || "-" },
-            { label: "Type", value: invoice?.customerType || invoice?.saleType || "Retail Customer" },
-            { label: "Total", value: `₹${formatCurrency(metrics.amount)}` },
-            { label: "Paid", value: `₹${formatCurrency(metrics.paidAmount)}` },
-            { label: "Due", value: `₹${formatCurrency(metrics.dueAmount)}` },
-            { label: "Status", value: <StatusChip status={metrics.status} /> },
-          ].map((item) => (
-            <Box key={item.label}>
-              <Typography sx={{ fontSize: 10, color: "#718096", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", mb: 0.3 }}>{item.label}</Typography>
-              <Typography sx={{ fontSize: 13, fontWeight: 700, color: "#1c2333" }}>{item.value}</Typography>
+            { label: "Customer", value: invoice?.customer?.name || "—" },
+            { label: "Mobile",   value: invoice?.customer?.phone || "—" },
+            { label: "Date",     value: invoice?.date || "—" },
+            { label: "Type",     value: invoice?.customerType || invoice?.saleType || "Retail Customer" },
+            { label: "Total",    value: `₹${formatCurrency(metrics.amount)}` },
+            { label: "Paid",     value: `₹${formatCurrency(metrics.paidAmount)}` },
+            { label: "Due",      value: `₹${formatCurrency(metrics.dueAmount)}` },
+            { label: "Status",   value: <StatusChip status={metrics.status} /> },
+          ].map((item, i) => (
+            <Box key={item.label} sx={{ px: 1.8, py: 1.2, borderRight: (i + 1) % 4 !== 0 ? `1px solid ${T.border}` : "none", borderBottom: i < 4 ? `1px solid ${T.border}` : "none", background: i < 4 ? T.surfaceAlt : T.surface }}>
+              <Typography sx={{ fontSize: 10, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", mb: 0.4 }}>{item.label}</Typography>
+              <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{item.value}</Typography>
             </Box>
           ))}
         </Box>
 
-        <Box sx={{ borderRadius: "10px", overflow: "hidden", border: "1px solid #e2eaf4" }}>
+        {/* Items table */}
+        <Box sx={{ border: `1px solid ${T.border}`, overflow: "hidden" }}>
           <Table size="small">
             <TableHead>
-              <TableRow sx={{ background: "#f1f5f9" }}>
-                {["#", "Item", "Qty", "Rate", "Total"].map((h) => (
-                  <TableCell key={h} sx={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", py: 1.2 }}>{h}</TableCell>
+              <TableRow sx={{ background: T.primary }}>
+                {["#","Item","Qty","Rate","Total"].map((h) => (
+                  <TableCell key={h} sx={{ fontSize: 11, fontWeight: 700, color: "#fff", textTransform: "uppercase", letterSpacing: ".05em", py: 1.2, borderRight: "1px solid rgba(255,255,255,.15)", "&:last-child": { borderRight: "none" } }}>{h}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
             <TableBody>
               {(invoice.items || []).map((item, idx) => (
-                <TableRow key={`${item.productId || item.name}-${idx}`} sx={{ "&:last-child td": { border: 0 } }}>
-                  <TableCell sx={{ fontSize: 13, color: "#64748b" }}>{idx + 1}</TableCell>
-                  <TableCell sx={{ fontSize: 13, fontWeight: 600, color: "#1c2333" }}>{item.name || "-"}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{item.quantity || 0}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>₹{formatCurrency(item.price || 0)}</TableCell>
-                  <TableCell sx={{ fontSize: 13, fontWeight: 700 }}>₹{formatCurrency(item.total || 0)}</TableCell>
+                <TableRow key={`${item.productId || item.name}-${idx}`}
+                  sx={{ background: idx % 2 === 0 ? T.surface : T.surfaceAlt, "&:last-child td": { border: 0 } }}>
+                  <TableCell sx={{ fontSize: 13, color: T.muted, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>{idx + 1}</TableCell>
+                  <TableCell sx={{ fontSize: 13, fontWeight: 600, color: T.dark, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>{item.name || "—"}</TableCell>
+                  <TableCell sx={{ fontSize: 13, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>{item.quantity || 0}</TableCell>
+                  <TableCell sx={{ fontSize: 13, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>₹{formatCurrency(item.price || 0)}</TableCell>
+                  <TableCell sx={{ fontSize: 13, fontWeight: 700, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>₹{formatCurrency(item.total || 0)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2.5 }}>
-        <Button onClick={onClose} sx={{ textTransform: "none", borderRadius: "8px", fontWeight: 700, color: "#64748b" }}>Close</Button>
-      </DialogActions>
+
+      <Box sx={{ px: 2.5, py: 2, borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", background: T.surfaceAlt }}>
+        <Box onClick={onClose} sx={{ px: 2.2, py: "8px", fontSize: 13, fontWeight: 600, color: T.muted, cursor: "pointer", border: `1px solid ${T.border}`, "&:hover": { borderColor: T.primary, color: T.primary }, transition: "all .12s", userSelect: "none" }}>
+          Close
+        </Box>
+      </Box>
     </Dialog>
   );
 };
 
-// ─── Table header cell ──────────────────────────────────────────────────────
+/* ── Table header cell ── */
 const TH = ({ children, align }) => (
-  <TableCell align={align} sx={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", py: 1.3, whiteSpace: "nowrap", background: "#f8fafc", borderBottom: "1px solid #e2eaf4" }}>
+  <TableCell align={align} sx={{
+    fontSize: 11, fontWeight: 700, color: "#fff",
+    textTransform: "uppercase", letterSpacing: ".05em",
+    py: 1.3, whiteSpace: "nowrap",
+    background: T.primary,
+    borderRight: "1px solid rgba(255,255,255,.15)",
+    "&:last-child": { borderRight: "none" },
+  }}>
     {children}
   </TableCell>
 );
 
 const TD = ({ children, bold, color, align }) => (
-  <TableCell align={align} sx={{ fontSize: 13, fontWeight: bold ? 700 : 400, color: color || "#374151", py: 1.2, borderBottom: "1px solid #f1f5f9" }}>
+  <TableCell align={align} sx={{
+    fontSize: 13, fontWeight: bold ? 700 : 400,
+    color: color || T.text,
+    py: 1.1, borderBottom: `1px solid ${T.borderLight}`,
+  }}>
     {children}
   </TableCell>
 );
 
-// ─── Expanded invoice sub-row ───────────────────────────────────────────────
+/* ── Customer row with collapse ── */
 const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
   const [open, setOpen] = useState(false);
   const targetDeleteInvoice = row.invoices?.[0] || null;
 
+  const rowBg = open ? T.primaryLight : T.surface;
+
   return (
     <>
       <TableRow
-        hover
-        sx={{
-          cursor: "pointer",
-          "&:hover": { background: "#f8fafc" },
-          background: open ? "#f0f7ff" : "transparent",
-          transition: "background 0.15s",
-        }}
+        sx={{ background: rowBg, transition: "background .12s",
+          "&:hover": { background: open ? T.primaryLight : T.surfaceAlt } }}
       >
-        <TableCell sx={{ width: 40, py: 1.2, borderBottom: "1px solid #f1f5f9" }}>
-          <IconButton
-            size="small"
+        {/* Expand toggle */}
+        <TableCell sx={{ width: 40, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+          <Box
             onClick={() => setOpen((v) => !v)}
             sx={{
-              width: 26,
-              height: 26,
-              background: open ? "#1a56a0" : "#f1f5f9",
-              color: open ? "#fff" : "#64748b",
-              "&:hover": { background: open ? "#0f3d7a" : "#e2eaf4" },
-              transition: "all 0.15s",
-            }}
-          >
-            {open ? <KeyboardArrowUpIcon sx={{ fontSize: 15 }} /> : <KeyboardArrowDownIcon sx={{ fontSize: 15 }} />}
-          </IconButton>
+              width: 24, height: 24, cursor: "pointer",
+              background: open ? T.primary : T.surfaceAlt,
+              color: open ? "#fff" : T.muted,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 700, userSelect: "none",
+              border: `1px solid ${open ? T.primary : T.border}`,
+              "&:hover": { background: open ? T.primaryDark : T.primaryLight, borderColor: T.primary, color: open ? "#fff" : T.primary },
+              transition: "all .12s",
+            }}>
+            {open ? "−" : "+"}
+          </Box>
         </TableCell>
-        <TD color="#94a3b8">{serial}</TD>
+        <TD color={T.muted}>{serial}</TD>
         <TD bold>{row.name}</TD>
         <TD>{row.phone || "—"}</TD>
         <TD>{row.city || "—"}</TD>
         <TD>{row.gstin || "—"}</TD>
         <TD bold>₹{formatCurrency(row.totalAmount)}</TD>
-        <TD bold color={Number(row.outstanding || 0) > 0 ? "#c0392b" : "#166534"}>
+        <TD bold color={Number(row.outstanding || 0) > 0 ? T.danger : T.success}>
           ₹{formatCurrency(row.outstanding)}
         </TD>
         <TD>{row.paymentTerms || "—"}</TD>
-        <TableCell sx={{ py: 1.2, borderBottom: "1px solid #f1f5f9" }}>
-          <Button
-            size="small"
-            onClick={() => onDelete(targetDeleteInvoice)}
-            disabled={!targetDeleteInvoice}
-            sx={{
-              textTransform: "none",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "#dc2626",
-              minWidth: 0,
-              px: 1,
-              py: 0.4,
-              borderRadius: "6px",
-              "&:hover": { background: "#fee2e2" },
-            }}
-          >
-            Delete
-          </Button>
+        <TableCell sx={{ py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+          <ActBtn label="Delete" color={T.danger} hoverBg={T.dangerLight}
+            onClick={() => onDelete(targetDeleteInvoice)} disabled={!targetDeleteInvoice} />
         </TableCell>
       </TableRow>
 
-      {/* Expanded invoice rows */}
+      {/* Expanded sub-table */}
       <TableRow>
         <TableCell colSpan={10} sx={{ py: 0, border: 0 }}>
           <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ mx: 2, my: 1.5, borderRadius: "10px", overflow: "hidden", border: "1px solid #dbe5f0", background: "#fff" }}>
-              <Box sx={{ px: 2, py: 1.2, background: "#f0f7ff", borderBottom: "1px solid #dbe5f0" }}>
-                <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#1a56a0", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <Box sx={{ mx: 2, my: 1.5, border: `1px solid ${T.border}`, overflow: "hidden" }}>
+              {/* Sub-header */}
+              <Box sx={{ px: 2, py: 1.1, background: T.primaryLight, borderBottom: `1px solid ${T.border}` }}>
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: ".07em" }}>
                   Invoices ({row.invoices.length})
                 </Typography>
               </Box>
+
               <Table size="small">
                 <TableHead>
-                  <TableRow sx={{ background: "#fafcfe" }}>
-                    {["Invoice No", "Date", "Total", "Paid", "Due", "Status", ""].map((h) => (
-                      <TableCell key={h} sx={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", py: 1, borderBottom: "1px solid #f1f5f9" }}>
-                        {h}
-                      </TableCell>
+                  <TableRow sx={{ background: T.surfaceAlt }}>
+                    {["Invoice No","Date","Total","Paid","Due","Status",""].map((h) => (
+                      <TableCell key={h} sx={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".05em", py: 1, borderBottom: `1px solid ${T.border}` }}>{h}</TableCell>
                     ))}
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {row.invoices.map((invoice) => {
-                    const m = getInvoicePaymentMetrics(invoice);
+                  {row.invoices.map((invoice, iIdx) => {
+                    const m  = getInvoicePaymentMetrics(invoice);
+                    const bg = iIdx % 2 === 0 ? T.surface : T.surfaceAlt;
                     return (
-                      <TableRow key={invoice._id} hover sx={{ "&:hover": { background: "#fafcfe" }, "&:last-child td": { border: 0 } }}>
-                        <TableCell sx={{ fontSize: 13, fontWeight: 700, color: "#1a56a0", py: 1.1 }}>{invoice.invoiceNo || "-"}</TableCell>
-                        <TableCell sx={{ fontSize: 12, color: "#64748b", py: 1.1 }}>{invoice.date || "-"}</TableCell>
-                        <TableCell sx={{ fontSize: 13, fontWeight: 600, py: 1.1 }}>₹{formatCurrency(m.amount)}</TableCell>
-                        <TableCell sx={{ fontSize: 13, color: "#166534", fontWeight: 600, py: 1.1 }}>₹{formatCurrency(m.paidAmount)}</TableCell>
-                        <TableCell sx={{ fontSize: 13, color: m.dueAmount > 0 ? "#c0392b" : "#166534", fontWeight: 600, py: 1.1 }}>₹{formatCurrency(m.dueAmount)}</TableCell>
-                        <TableCell sx={{ py: 1.1 }}><StatusChip status={m.status} /></TableCell>
-                        <TableCell align="right" sx={{ py: 1.1 }}>
-                          <Box sx={{ display: "inline-flex", gap: 0.5 }}>
-                            {[
-                              { label: "View", color: "#2563eb", hoverBg: "#eff6ff", onClick: () => onView(invoice) },
-                              { label: "Edit", color: "#7c3aed", hoverBg: "#f5f3ff", onClick: () => onEdit(invoice) },
-                              { label: "Pay", color: "#0891b2", hoverBg: "#ecfeff", onClick: () => onPay(invoice, row) },
-                              { label: "Delete", color: "#dc2626", hoverBg: "#fee2e2", onClick: () => onDelete(invoice) },
-                            ].map((btn) => (
-                              <Button
-                                key={btn.label}
-                                size="small"
-                                onClick={btn.onClick}
-                                sx={{
-                                  textTransform: "none",
-                                  fontSize: 12,
-                                  fontWeight: 600,
-                                  color: btn.color,
-                                  minWidth: 0,
-                                  px: 1,
-                                  py: 0.4,
-                                  borderRadius: "6px",
-                                  "&:hover": { background: btn.hoverBg },
-                                }}
-                              >
-                                {btn.label}
-                              </Button>
-                            ))}
+                      <TableRow key={invoice._id}
+                        sx={{ background: bg, "&:hover": { background: T.primaryLight }, "&:last-child td": { border: 0 }, transition: "background .12s" }}>
+                        <TableCell sx={{ fontSize: 13, fontWeight: 700, color: T.primary, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          {invoice.invoiceNo || "—"}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 12, color: T.muted, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          {invoice.date || "—"}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, fontWeight: 600, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          ₹{formatCurrency(m.amount)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, fontWeight: 600, color: T.success, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          ₹{formatCurrency(m.paidAmount)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, fontWeight: 600, color: m.dueAmount > 0 ? T.danger : T.success, py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          ₹{formatCurrency(m.dueAmount)}
+                        </TableCell>
+                        <TableCell sx={{ py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          <StatusChip status={m.status} />
+                        </TableCell>
+                        <TableCell align="right" sx={{ py: 1, borderBottom: `1px solid ${T.borderLight}` }}>
+                          <Box sx={{ display: "inline-flex", gap: 0 }}>
+                            <ActBtn label="View"   color="#2563eb" hoverBg="#eff6ff" onClick={() => onView(invoice)} />
+                            <ActBtn label="Edit"   color="#7c3aed" hoverBg="#f5f3ff" onClick={() => onEdit(invoice)} />
+                            <ActBtn label="Pay"    color="#0891b2" hoverBg="#ecfeff" onClick={() => onPay(invoice, row)} />
+                            <ActBtn label="Delete" color={T.danger} hoverBg={T.dangerLight} onClick={() => onDelete(invoice)} />
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -400,7 +431,7 @@ const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
                   })}
                   {row.invoices.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 3, color: "#94a3b8", fontSize: 13 }}>
+                      <TableCell colSpan={7} align="center" sx={{ py: 3, color: T.faint, fontSize: 13 }}>
                         No invoices for this customer
                       </TableCell>
                     </TableRow>
@@ -415,31 +446,28 @@ const CustomerRow = ({ row, serial, onView, onEdit, onPay, onDelete }) => {
   );
 };
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+/* ─── Main Component ─────────────────────────────────────── */
 const CustomerDetails = () => {
   const navigate = useNavigate();
-  const [invoices, setInvoices] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  const [invoices,       setInvoices]       = useState([]);
+  const [customers,      setCustomers]      = useState([]);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const [viewInvoice, setViewInvoice] = useState(null);
-  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: "", invoiceNo: "" });
-  const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("Dealer");
-  const [typeFilters, setTypeFilters] = useState({
-    "Retail Customer": "all",
-    Dealer: "all",
-    Contractor: "all",
-    "Builder / Project": "all",
+  const [viewInvoice,    setViewInvoice]    = useState(null);
+  const [confirmDelete,  setConfirmDelete]  = useState({ open: false, id: "", invoiceNo: "" });
+  const [search,         setSearch]         = useState("");
+  const [activeTab,      setActiveTab]      = useState("Dealer");
+  const [typeFilters,    setTypeFilters]    = useState({
+    "Retail Customer": "all", Dealer: "all", Contractor: "all", "Builder / Project": "all",
   });
+  const [page,     setPage]     = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchAll = async () => {
     try {
       const [invoiceRes, customerRes] = await Promise.all([getInvoices(), getCustomers()]);
       setInvoices(Array.isArray(invoiceRes.data) ? invoiceRes.data : []);
       setCustomers(Array.isArray(customerRes.data) ? customerRes.data : []);
-    } catch {
-      toast.error("Failed to fetch customer details");
-    }
+    } catch { toast.error("Failed to fetch customer details"); }
   };
 
   useEffect(() => { fetchAll(); }, []);
@@ -448,9 +476,7 @@ const CustomerDetails = () => {
 
   const rows = useMemo(() => {
     const customerMap = new Map();
-    customers.forEach((c) => {
-      customerMap.set(`${c.name || "Unknown"}|${c.phone || ""}`, c);
-    });
+    customers.forEach((c) => customerMap.set(`${c.name || "Unknown"}|${c.phone || ""}`, c));
 
     const fromInvoices = grouped.map((entry) => {
       const key = `${entry.customer.name || "Unknown"}|${entry.customer.phone || ""}`;
@@ -459,14 +485,14 @@ const CustomerDetails = () => {
       const type = normalizeCustomerType(customer.customerType || firstInvoice?.customerType || firstInvoice?.saleType || firstInvoice?.customer?.customerType);
       return {
         key, type,
-        name: customer.name || entry.customer.name || "Unknown",
-        phone: customer.phone || entry.customer.phone || "-",
-        city: customer.city || customer?.dealerDetails?.city || "-",
-        gstin: customer.gstin || customer?.dealerDetails?.gstin || firstInvoice?.customer?.gstin || "-",
-        paymentTerms: customer.paymentTerms || customer?.dealerDetails?.paymentTerms || "-",
-        totalAmount: Number(entry.totals.amount || 0),
-        outstanding: Number(entry.totals.due || 0),
-        invoices: entry.invoices,
+        name:         customer.name         || entry.customer.name || "Unknown",
+        phone:        customer.phone        || entry.customer.phone || "—",
+        city:         customer.city         || customer?.dealerDetails?.city || "—",
+        gstin:        customer.gstin        || customer?.dealerDetails?.gstin || firstInvoice?.customer?.gstin || "—",
+        paymentTerms: customer.paymentTerms || customer?.dealerDetails?.paymentTerms || "—",
+        totalAmount:  Number(entry.totals.amount || 0),
+        outstanding:  Number(entry.totals.due    || 0),
+        invoices:     entry.invoices,
       };
     });
 
@@ -476,11 +502,11 @@ const CustomerDetails = () => {
       .map((c) => ({
         key: `${c.name || "Unknown"}|${c.phone || ""}`,
         type: normalizeCustomerType(c.customerType),
-        name: c.name || "Unknown",
-        phone: c.phone || "-",
-        city: c.city || c?.dealerDetails?.city || "-",
-        gstin: c.gstin || c?.dealerDetails?.gstin || "-",
-        paymentTerms: c.paymentTerms || c?.dealerDetails?.paymentTerms || "-",
+        name:         c.name         || "Unknown",
+        phone:        c.phone        || "—",
+        city:         c.city         || c?.dealerDetails?.city || "—",
+        gstin:        c.gstin        || c?.dealerDetails?.gstin || "—",
+        paymentTerms: c.paymentTerms || c?.dealerDetails?.paymentTerms || "—",
         totalAmount: 0, outstanding: 0, invoices: [],
       }));
 
@@ -488,37 +514,27 @@ const CustomerDetails = () => {
   }, [customers, grouped]);
 
   const totals = useMemo(() => {
-    const tabRows = rows.filter((r) => r.type === activeTab);
-    return tabRows.reduce(
-      (acc, r) => {
-        acc.all += 1;
+    return rows
+      .filter((r) => r.type === activeTab)
+      .reduce((acc, r) => {
+        acc.all    += 1;
         acc.amount += Number(r.totalAmount || 0);
-        acc.due += Number(r.outstanding || 0);
+        acc.due    += Number(r.outstanding || 0);
         return acc;
-      },
-      { all: 0, amount: 0, due: 0 }
-    );
+      }, { all: 0, amount: 0, due: 0 });
   }, [rows, activeTab]);
 
   const sectionRows = (typeKey) => {
     const filter = typeFilters[typeKey] || "all";
-    const q = search.trim().toLowerCase();
+    const q      = search.trim().toLowerCase();
     return rows
       .filter((r) => r.type === typeKey)
       .filter((r) => {
         if (filter === "pending") return Number(r.outstanding || 0) > 0;
-        if (filter === "paid") return Number(r.outstanding || 0) <= 0;
+        if (filter === "paid")    return Number(r.outstanding || 0) <= 0;
         return true;
       })
-      .filter((r) => {
-        if (!q) return true;
-        return (
-          r.name.toLowerCase().includes(q) ||
-          (r.phone || "").toLowerCase().includes(q) ||
-          (r.city || "").toLowerCase().includes(q) ||
-          (r.gstin || "").toLowerCase().includes(q)
-        );
-      });
+      .filter((r) => !q || r.name.toLowerCase().includes(q) || (r.phone || "").includes(q) || (r.city || "").toLowerCase().includes(q) || (r.gstin || "").toLowerCase().includes(q));
   };
 
   const askDelete = (invoice) => {
@@ -531,258 +547,227 @@ const CustomerDetails = () => {
       await deleteInvoice(confirmDelete.id);
       toast.success("Invoice deleted");
       fetchAll();
-    } catch {
-      toast.error("Delete failed");
-    } finally {
-      setConfirmDelete({ open: false, id: "", invoiceNo: "" });
-    }
+    } catch { toast.error("Delete failed"); }
+    finally { setConfirmDelete({ open: false, id: "", invoiceNo: "" }); }
   };
 
   const activeSection = TYPE_SECTIONS.find((s) => s.key === activeTab) || TYPE_SECTIONS[0];
-  const activeList = sectionRows(activeTab);
+  const activeList    = sectionRows(activeTab);
+  const totalPages    = Math.max(1, Math.ceil(activeList.length / pageSize));
+  const pagedList     = activeList.slice((page - 1) * pageSize, page * pageSize);
 
-  const STAT_CARDS = [
-    { icon: <PeopleIcon sx={{ fontSize: 18 }} />, label: `Total ${activeSection.title}`, value: totals.all, accent: activeSection.color, bg: activeSection.bg },
-    { icon: <CurrencyRupeeIcon sx={{ fontSize: 18 }} />, label: "Total Amount", value: `₹${formatCurrency(totals.amount)}`, accent: "#0f3d7a", bg: "#edf4ff" },
-    { icon: <HourglassBottomIcon sx={{ fontSize: 18 }} />, label: "Outstanding", value: `₹${formatCurrency(totals.due)}`, accent: "#c0392b", bg: "#fff3ea" },
-  ];
-
+  /* ════════════════════════ RENDER ════════════════ */
   return (
-    <Box sx={{ p: 0, background: "#f0f4f8", minHeight: "100%" }}>
+    <Box sx={{ p: 0, background: T.bg, minHeight: "100%", fontFamily: "'Noto Sans', sans-serif" }}>
 
-      {/* Header */}
-      <Card sx={{ mb: 2.5, p: { xs: 2.5, md: 3 }, borderRadius: "18px", background: "linear-gradient(135deg, #1a56a0 0%, #0f3d7a 100%)", color: "#fff", boxShadow: "0 18px 40px rgba(15,61,122,0.24)" }}>
-        <Typography sx={{ fontSize: 28, fontWeight: 800, fontFamily: "Rajdhani, sans-serif", lineHeight: 1 }}>
-          Customer Details
-        </Typography>
-        <Typography sx={{ mt: 0.8, fontSize: 13, color: "rgba(255,255,255,0.76)" }}>
-          Expand each row to view invoices and actions
-        </Typography>
-      </Card>
+      {/* ── Page header ── */}
+      <Box sx={{ px: 3, py: 1.8, background: T.surface, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <Box>
+          <Typography sx={{ fontSize: 20, fontWeight: 800, color: T.dark, lineHeight: 1.2, letterSpacing: "-.01em" }}>Customer Details</Typography>
+          <Typography sx={{ fontSize: 12, color: T.muted }}>Expand each row to view invoices and actions</Typography>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, fontSize: 12, color: T.muted }}>
+          <span>🏠 Home</span>
+          <span style={{ margin: "0 4px" }}>›</span>
+          <span>Customers</span>
+          <span style={{ margin: "0 4px" }}>›</span>
+          <span style={{ color: T.primary, fontWeight: 600 }}>Details</span>
+        </Box>
+      </Box>
 
-      {/* ── Type Tabs ── */}
-      <Card sx={{ mb: 2.5, borderRadius: "14px", border: "1px solid #dbe5f0", boxShadow: "0 2px 8px rgba(15,35,60,0.05)", overflow: "hidden" }}>
-        <Tabs
-          value={activeTab}
-          onChange={(_, v) => setActiveTab(v)}
-          variant="fullWidth"
-          sx={{
-            minHeight: 52,
-            background: "#fff",
-            "& .MuiTabs-indicator": { display: "none" },
-            "& .MuiTabs-flexContainer": { height: 52 },
-          }}
-        >
-          {TYPE_SECTIONS.map((section) => {
-            const count = rows.filter((r) => r.type === section.key).length;
-            const isActive = activeTab === section.key;
-            return (
-              <Tab
-                key={section.key}
-                value={section.key}
-                label={
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography sx={{ fontSize: 13, fontWeight: isActive ? 700 : 500, lineHeight: 1 }}>
-                      {section.title}
-                    </Typography>
-                    <Box
-                      sx={{
-                        px: 1,
-                        py: 0.15,
-                        borderRadius: "20px",
-                        fontSize: 11,
-                        fontWeight: 700,
-                        background: isActive ? section.color : "#f1f5f9",
-                        color: isActive ? "#fff" : "#64748b",
-                        minWidth: 22,
-                        textAlign: "center",
-                        lineHeight: "18px",
-                      }}
-                    >
-                      {count}
-                    </Box>
-                  </Box>
-                }
-                sx={{
-                  minHeight: 52,
-                  textTransform: "none",
-                  borderRight: "1px solid #e2eaf4",
-                  color: isActive ? section.color : "#64748b",
-                  background: isActive ? section.bg : "#fff",
-                  borderBottom: isActive ? `3px solid ${section.color}` : "3px solid transparent",
-                  transition: "all 0.18s ease",
-                  "&:last-child": { borderRight: "none" },
-                  "&.Mui-selected": { color: section.color },
-                }}
-              />
-            );
-          })}
-        </Tabs>
-      </Card>
+      <Box sx={{ p: 2.5 }}>
 
-      {/* ── Stat Cards (tab-aware) ── */}
-      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, mb: 2.5 }}>
-        {STAT_CARDS.map((s) => (
-          <Box
-            key={s.label}
-            sx={{
-              background: "#fff",
-              border: "1px solid #e5e7eb",
-              borderRadius: "14px",
-              px: 2.5,
-              py: 2,
-              display: "flex",
-              alignItems: "center",
-              gap: 1.8,
+        {/* ── Stat cards ── */}
+        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "1fr", sm: "repeat(3,1fr)" }, mb: 2 }}>
+          {[
+            { icon: <PeopleIcon sx={{ fontSize: 18 }} />,          label: `Total ${activeSection.title}`, value: totals.all,                          accent: activeSection.color, bg: activeSection.bg },
+            { icon: <CurrencyRupeeIcon sx={{ fontSize: 18 }} />,   label: "Total Amount",                 value: `₹${formatCurrency(totals.amount)}`, accent: T.primaryDark,       bg: T.primaryLight },
+            { icon: <HourglassBottomIcon sx={{ fontSize: 18 }} />, label: "Outstanding",                  value: `₹${formatCurrency(totals.due)}`,    accent: T.danger,            bg: T.dangerLight },
+          ].map((s) => (
+            <Box key={s.label} sx={{
+              background: T.surface, border: `1px solid ${T.border}`,
               borderLeft: `4px solid ${s.accent}`,
-              boxShadow: "0 2px 8px rgba(0,0,0,.04)",
-            }}
-          >
-            <Box sx={{ width: 42, height: 42, borderRadius: "12px", background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", color: s.accent, flexShrink: 0 }}>
-              {s.icon}
+              px: 2.2, py: 1.8,
+              display: "flex", alignItems: "center", gap: 1.8,
+              boxShadow: "0 1px 3px rgba(15,23,42,.05)",
+            }}>
+              <Box sx={{ width: 40, height: 40, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", color: s.accent, flexShrink: 0 }}>
+                {s.icon}
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: 10.5, color: T.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", mb: 0.3 }}>{s.label}</Typography>
+                <Typography sx={{ fontSize: 22, fontWeight: 800, color: T.dark, lineHeight: 1 }}>{s.value}</Typography>
+              </Box>
             </Box>
-            <Box>
-              <Typography sx={{ fontSize: 11, color: "#718096", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", mb: 0.3 }}>{s.label}</Typography>
-              <Typography sx={{ fontSize: 22, fontWeight: 800, color: "#1c2333", lineHeight: 1, fontFamily: "'Rajdhani', sans-serif" }}>{s.value}</Typography>
-            </Box>
-          </Box>
-        ))}
-      </Box>
+          ))}
+        </Box>
 
-      {/* ── Search ── */}
-      <Box sx={{ mb: 2 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder={`Search ${activeSection.title} by name, mobile, city or GSTIN…`}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: "#94a3b8" }} />
-              </InputAdornment>
-            ),
-          }}
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              borderRadius: "12px",
-              background: "#fff",
-              fontSize: 13,
-              boxShadow: "0 2px 8px rgba(0,0,0,.04)",
-              "& fieldset": { borderColor: "#dbe5f0" },
-              "&:hover fieldset": { borderColor: "#94a3b8" },
-              "&.Mui-focused fieldset": { borderColor: "#1a56a0", borderWidth: 2 },
-            },
-          }}
-        />
-      </Box>
+        {/* ── Main card ── */}
+        <Box sx={{ background: T.surface, border: `1px solid ${T.border}`, boxShadow: "0 1px 3px rgba(15,23,42,.06), 0 4px 16px rgba(15,23,42,.04)", overflow: "hidden" }}>
 
-      {/* ── Active Section Table ── */}
-      <Card sx={{ borderRadius: "14px", border: "1px solid #dbe5f0", boxShadow: "0 4px 16px rgba(15,35,60,0.06)", overflow: "hidden" }}>
-        {/* Table sub-header with filter pills */}
-        <Box sx={{ px: 2.5, py: 1.6, background: "#fff", borderBottom: "1px solid #e2eaf4", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: "50%", background: activeSection.color, flexShrink: 0 }} />
-            <Typography sx={{ fontSize: 15, fontWeight: 800, color: "#1c2333", fontFamily: "Rajdhani, sans-serif" }}>
-              {activeSection.title}
-            </Typography>
-            <Box sx={{ px: 1.2, py: 0.2, borderRadius: "6px", background: activeSection.bg, border: `1px solid ${activeSection.color}22` }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 700, color: activeSection.color }}>{activeList.length}</Typography>
-            </Box>
-          </Box>
-          <Box sx={{ display: "flex", gap: 0.8 }}>
-            {[{ key: "all", label: "All" }, { key: "pending", label: "Pending" }, { key: "paid", label: "Paid" }].map((flt) => {
-              const isActive = typeFilters[activeTab] === flt.key;
+          {/* Type tab bar */}
+          <Box sx={{ display: "flex", borderBottom: `1px solid ${T.border}`, background: T.surface, overflowX: "auto" }}>
+            {TYPE_SECTIONS.map((section) => {
+              const count    = rows.filter((r) => r.type === section.key).length;
+              const isActive = activeTab === section.key;
               return (
-                <Button
-                  key={flt.key}
-                  size="small"
-                  onClick={() => setTypeFilters((prev) => ({ ...prev, [activeTab]: flt.key }))}
+                <Box
+                  key={section.key}
+                  onClick={() => { setActiveTab(section.key); setPage(1); }}
                   sx={{
-                    textTransform: "none",
-                    fontSize: 12,
-                    fontWeight: isActive ? 700 : 500,
-                    px: 1.8,
-                    py: 0.5,
-                    minWidth: 0,
-                    borderRadius: "8px",
-                    color: isActive ? activeSection.color : "#64748b",
-                    background: isActive ? activeSection.bg : "transparent",
-                    border: isActive ? `1px solid ${activeSection.color}44` : "1px solid transparent",
-                    "&:hover": { background: activeSection.bg, color: activeSection.color },
-                    transition: "all 0.15s",
-                  }}
-                >
-                  {flt.label}
-                </Button>
+                    flex: 1, minWidth: 120,
+                    px: 2, py: 1.5,
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: 1,
+                    cursor: "pointer", userSelect: "none",
+                    background: isActive ? section.bg : T.surface,
+                    borderBottom: isActive ? `3px solid ${section.color}` : "3px solid transparent",
+                    borderRight: `1px solid ${T.border}`,
+                    "&:last-child": { borderRight: "none" },
+                    transition: "all .15s",
+                    "&:hover": { background: section.bg },
+                  }}>
+                  <Typography sx={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? section.color : T.muted, whiteSpace: "nowrap" }}>
+                    {section.title}
+                  </Typography>
+                  <Box sx={{ px: 0.9, py: "2px", fontSize: 11, fontWeight: 700, background: isActive ? section.color : "#f1f5f9", color: isActive ? "#fff" : T.muted, minWidth: 22, textAlign: "center" }}>
+                    {count}
+                  </Box>
+                </Box>
               );
             })}
           </Box>
-        </Box>
 
-        <Box sx={{ overflowX: "auto" }}>
-          <Table size="small" sx={{ minWidth: 860 }}>
-            <TableHead>
-              <TableRow>
-                <TH />
-                <TH>SNo</TH>
-                <TH>Name</TH>
-                <TH>Mobile</TH>
-                <TH>City</TH>
-                <TH>GSTIN</TH>
-                <TH>Total Amount</TH>
-                <TH>Outstanding</TH>
-                <TH>Payment Terms</TH>
-                <TH>Actions</TH>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activeList.map((row, idx) => (
-                <CustomerRow
-                  key={`${activeTab}-${row.key}`}
-                  row={row}
-                  serial={idx + 1}
-                  onView={(inv) => setViewInvoice(inv)}
-                  onEdit={(inv) =>
-                    navigate("/customers/bill", {
+          {/* Toolbar: filter pills + search */}
+          <Box sx={{ px: 2.5, py: 1.4, borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1.2, background: T.surfaceAlt }}>
+            {/* Filter pills */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ width: 8, height: 8, background: activeSection.color, flexShrink: 0 }} />
+              <Typography sx={{ fontSize: 13, fontWeight: 700, color: T.dark }}>{activeSection.title}</Typography>
+              <Box sx={{ px: 1, py: "2px", fontSize: 11, fontWeight: 700, color: activeSection.color, background: activeSection.bg, border: `1px solid ${activeSection.color}22` }}>
+                {activeList.length}
+              </Box>
+              <Box sx={{ width: 1, height: 16, background: T.border, mx: 0.5 }} />
+              {[{ key: "all", label: "All" }, { key: "pending", label: "Pending" }, { key: "paid", label: "Paid" }].map((flt) => {
+                const isActive = typeFilters[activeTab] === flt.key;
+                return (
+                  <Box key={flt.key} onClick={() => { setTypeFilters((prev) => ({ ...prev, [activeTab]: flt.key })); setPage(1); }}
+                    sx={{ px: 1.4, py: "4px", fontSize: 12, fontWeight: isActive ? 700 : 500, cursor: "pointer", userSelect: "none",
+                      color: isActive ? activeSection.color : T.muted,
+                      background: isActive ? activeSection.bg : "transparent",
+                      border: isActive ? `1px solid ${activeSection.color}44` : "1px solid transparent",
+                      "&:hover": { background: activeSection.bg, color: activeSection.color },
+                      transition: "all .12s",
+                    }}>
+                    {flt.label}
+                  </Box>
+                );
+              })}
+            </Box>
+
+            {/* Search */}
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, background: T.surface, border: `1px solid ${T.border}`, px: 1.2, py: 0.5, "&:focus-within": { borderColor: T.primary, boxShadow: "0 0 0 2px rgba(26,86,160,.08)" }, transition: "all .12s", minWidth: 260 }}>
+              <SearchIcon sx={{ fontSize: 16, color: T.faint, flexShrink: 0 }} />
+              <input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                placeholder={`Search ${activeSection.title}…`}
+                style={{ border: "none", outline: "none", fontSize: 13, color: T.text, background: "transparent", width: "100%", fontFamily: "inherit" }}
+              />
+            </Box>
+          </Box>
+
+          {/* Table */}
+          <Box sx={{ overflowX: "auto" }}>
+            <Table size="small" sx={{ minWidth: 860 }}>
+              <TableHead>
+                <TableRow>
+                  <TH />
+                  <TH>SNo</TH>
+                  <TH>Name</TH>
+                  <TH>Mobile</TH>
+                  <TH>City</TH>
+                  <TH>GSTIN</TH>
+                  <TH>Total Amount</TH>
+                  <TH>Outstanding</TH>
+                  <TH>Payment Terms</TH>
+                  <TH>Actions</TH>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {pagedList.map((row, idx) => (
+                  <CustomerRow
+                    key={`${activeTab}-${row.key}`}
+                    row={row}
+                    serial={(page - 1) * pageSize + idx + 1}
+                    onView={(inv) => setViewInvoice(inv)}
+                    onEdit={(inv) => navigate("/customers/bill", {
                       state: {
                         editInvoice: inv,
-                        editCustomer: {
-                          name: row.name, phone: row.phone,
-                          address: row.invoices?.[0]?.customer?.address || "",
-                          gstin: row.gstin, customerType: row.type,
-                          saleType: row.type, paymentTerms: row.paymentTerms,
-                        },
+                        editCustomer: { name: row.name, phone: row.phone, address: row.invoices?.[0]?.customer?.address || "", gstin: row.gstin, customerType: row.type, saleType: row.type, paymentTerms: row.paymentTerms },
                       },
-                    })
-                  }
-                  onPay={(inv, r) =>
-                    navigate("/customers/payments", {
-                      state: {
-                        fromPayAction: true,
-                        prefillCustomer: { name: r.name, phone: r.phone },
-                        prefillInvoice: { id: inv._id, invoiceNo: inv.invoiceNo, dueAmount: getInvoicePaymentMetrics(inv).dueAmount },
-                      },
-                    })
-                  }
-                  onDelete={askDelete}
-                />
-              ))}
-              {activeList.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 6, color: "#94a3b8", fontSize: 13 }}>
-                    {search ? `No results for "${search}" in ${activeSection.title}` : `No ${activeSection.title} found`}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Box>
-      </Card>
+                    })}
+                    onPay={(inv, r) => navigate("/customers/payments", {
+                      state: { fromPayAction: true, prefillCustomer: { name: r.name, phone: r.phone }, prefillInvoice: { id: inv._id, invoiceNo: inv.invoiceNo, dueAmount: getInvoicePaymentMetrics(inv).dueAmount } },
+                    })}
+                    onDelete={askDelete}
+                  />
+                ))}
+                {activeList.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={10} align="center" sx={{ py: 7, color: T.faint, fontSize: 13 }}>
+                      {search ? `No results for "${search}" in ${activeSection.title}` : `No ${activeSection.title} found`}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Box>
 
-      <InvoiceViewDialog invoice={viewInvoice} open={Boolean(viewInvoice)} onClose={() => setViewInvoice(null)} />
-      <PaymentDialog invoice={editingInvoice} open={!!editingInvoice} onClose={() => setEditingInvoice(null)} onSaved={fetchAll} />
+          {/* ── Pagination footer ── */}
+          <Box sx={{ px: 2.5, py: 1.4, borderTop: `1px solid ${T.border}`, background: T.surfaceAlt, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, fontSize: 13, color: T.muted }}>
+              <span>Show</span>
+              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                style={{ padding: "4px 8px", border: `1px solid ${T.border}`, fontSize: 13, color: T.text, background: T.surface, cursor: "pointer", outline: "none", fontFamily: "inherit" }}>
+                {[5, 10, 25, 50].map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span>entries</span>
+              <Box sx={{ mx: 0.5, width: 1, height: 14, background: T.border }} />
+              <span>
+                {activeList.length === 0 ? "No entries" : `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, activeList.length)} of ${activeList.length}`}
+              </span>
+            </Box>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+              <Box onClick={() => setPage((p) => Math.max(1, p - 1))}
+                sx={{ px: 1.3, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, cursor: page === 1 ? "default" : "pointer", color: page === 1 ? T.faint : T.text, background: page === 1 ? T.surfaceAlt : T.surface, userSelect: "none", "&:hover": page > 1 ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
+                Previous
+              </Box>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter((n) => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+                .reduce((acc, n, i, arr) => { if (i > 0 && n - arr[i - 1] > 1) acc.push("..."); acc.push(n); return acc; }, [])
+                .map((item, i) =>
+                  item === "..." ? (
+                    <Box key={`e${i}`} sx={{ px: 1, fontSize: 12, color: T.faint }}>...</Box>
+                  ) : (
+                    <Box key={item} onClick={() => setPage(item)}
+                      sx={{ px: 1.4, py: "5px", border: `1px solid ${item === page ? T.primary : T.border}`, fontSize: 12, fontWeight: item === page ? 700 : 400, cursor: "pointer", background: item === page ? T.primary : T.surface, color: item === page ? "#fff" : T.text, userSelect: "none", "&:hover": item !== page ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
+                      {item}
+                    </Box>
+                  )
+                )}
+              <Box onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                sx={{ px: 1.3, py: "5px", border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 600, cursor: page === totalPages ? "default" : "pointer", color: page === totalPages ? T.faint : T.text, background: page === totalPages ? T.surfaceAlt : T.surface, userSelect: "none", "&:hover": page < totalPages ? { borderColor: T.primary, color: T.primary, background: T.primaryLight } : {}, transition: "all .12s" }}>
+                Next
+              </Box>
+            </Box>
+          </Box>
+
+        </Box>
+      </Box>
+
+      {/* ── Dialogs ── */}
+      <InvoiceViewDialog invoice={viewInvoice}    open={Boolean(viewInvoice)}    onClose={() => setViewInvoice(null)} />
+      <PaymentDialog     invoice={editingInvoice} open={Boolean(editingInvoice)} onClose={() => setEditingInvoice(null)} onSaved={fetchAll} />
       <ConfirmDialog
         open={confirmDelete.open}
         title="Delete Invoice"
