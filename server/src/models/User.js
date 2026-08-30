@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema(
     passwordResetOtpExpires: { type: Date, default: null },
     role: {
       type: String,
-      enum: ["admin", "staff"],
+      enum: ["owner", "admin", "staff"],
       default: "staff",
     },
   },

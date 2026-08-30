@@ -10,27 +10,27 @@ import { useAuth } from "../../context/AuthContext";
 export const NAV_HEIGHT = 60;
 
 const routeMeta = [
-  { match: (p) => p === "/", title: "Dashboard", subtitle: "Welcome to your workspace", tabIcon: "📊" },
-  { match: (p) => p === "/quotation", title: "Quotation", subtitle: "Create & manage quotations", tabIcon: "🧾" },
-  { match: (p) => p === "/customers/bill", title: "Create Bill", subtitle: "New sales invoice", tabIcon: "🧾" },
-  { match: (p) => p.startsWith("/customers/payments"), title: "Receive Payment", subtitle: "Record customer payments", tabIcon: "💳" },
-  { match: (p) => p.startsWith("/customers/details"), title: "Customer Details", subtitle: "View & manage customers", tabIcon: "👥" },
-  { match: (p) => p.startsWith("/customers/create"), title: "Create Customer", subtitle: "Add a new customer", tabIcon: "👤" },
-  { match: (p) => p.startsWith("/customers"), title: "Customers", subtitle: "Manage your customer base", tabIcon: "👥" },
-  { match: (p) => p.startsWith("/products"), title: "Products", subtitle: "Inventory & stock management", tabIcon: "📦" },
-  { match: (p) => p.startsWith("/suppliers"), title: "Suppliers", subtitle: "Vendor & purchase tracking", tabIcon: "🚚" },
-  { match: (p) => p.startsWith("/purchase"), title: "Purchases", subtitle: "Purchase order management", tabIcon: "🛒" },
-  { match: (p) => p.startsWith("/reports"), title: "Reports", subtitle: "Business reports", tabIcon: "📈" },
+  { match: (p) => p === "/", title: "Dashboard", subtitle: "Welcome to your workspace", tabIcon: "ðŸ“Š" },
+  { match: (p) => p === "/quotation", title: "Quotation", subtitle: "Create & manage quotations", tabIcon: "ðŸ§¾" },
+  { match: (p) => p === "/customers/bill", title: "Create Bill", subtitle: "New sales invoice", tabIcon: "ðŸ§¾" },
+  { match: (p) => p.startsWith("/customers/payments"), title: "Receive Payment", subtitle: "Record customer payments", tabIcon: "ðŸ’³" },
+  { match: (p) => p.startsWith("/customers/details"), title: "Customer Details", subtitle: "View & manage customers", tabIcon: "ðŸ‘¥" },
+  { match: (p) => p.startsWith("/customers/create"), title: "Create Customer", subtitle: "Add a new customer", tabIcon: "ðŸ‘¤" },
+  { match: (p) => p.startsWith("/customers"), title: "Customers", subtitle: "Manage your customer base", tabIcon: "ðŸ‘¥" },
+  { match: (p) => p.startsWith("/products"), title: "Products", subtitle: "Inventory & stock management", tabIcon: "ðŸ“¦" },
+  { match: (p) => p.startsWith("/suppliers"), title: "Suppliers", subtitle: "Vendor & purchase tracking", tabIcon: "ðŸšš" },
+  { match: (p) => p.startsWith("/purchase"), title: "Purchases", subtitle: "Purchase order management", tabIcon: "ðŸ›’" },
+  { match: (p) => p.startsWith("/reports"), title: "Reports", subtitle: "Business reports", tabIcon: "ðŸ“ˆ" },
   {
-    match: (p) => ["/company-profile", "/invoice-settings", "/product-defaults", "/user-management", "/backup-data"].some((s) => p.startsWith(s)),
+    match: (p) => ["/company-profile", "/invoice-settings", "/product-defaults", "/user-management", "/backup-data", "/license-management"].some((s) => p.startsWith(s)),
     title: "Settings",
     subtitle: "Configure your application",
-    tabIcon: "⚙️",
+    tabIcon: "âš™ï¸",
   },
 ];
 
 const getRouteMeta = (pathname) =>
-  routeMeta.find((r) => r.match(pathname)) || { title: "Billing System", subtitle: "Welcome back", tabIcon: "🏢" };
+  routeMeta.find((r) => r.match(pathname)) || { title: "Billing System", subtitle: "Welcome back", tabIcon: "ðŸ¢" };
 
 const setFavicon = (emoji) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="44">${emoji}</text></svg>`;
@@ -67,19 +67,8 @@ const LiveDateTime = () => {
   );
 
   return (
-    <Box
-      sx={{
-        px: 1.2,
-        py: 0.7,
-        borderRadius: "8px",
-        background: "#f8fafc",
-        border: "1px solid #e2e8f0",
-        whiteSpace: "nowrap",
-      }}
-    >
-      <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#475569", lineHeight: 1 }}>
-        {label}
-      </Typography>
+    <Box sx={{ px: 1.2, py: 0.7, borderRadius: "8px", background: "#f8fafc", border: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>
+      <Typography sx={{ fontSize: 12, fontWeight: 700, color: "#475569", lineHeight: 1 }}>{label}</Typography>
     </Box>
   );
 };
@@ -114,8 +103,8 @@ const NavIconBtn = ({ icon, tooltip, onClick, danger }) => (
 );
 
 const RoleBadge = ({ role }) => {
-  const label = role === "admin" ? "Admin" : "Staff";
-  const isAdmin = role === "admin";
+  const label = role === "owner" ? "Owner" : role === "admin" ? "Admin" : "Staff";
+  const isPrivileged = role === "owner" || role === "admin";
 
   return (
     <Box
@@ -123,8 +112,8 @@ const RoleBadge = ({ role }) => {
         px: 1.2,
         py: 0.7,
         borderRadius: "8px",
-        background: isAdmin ? "#fff7ed" : "#eff6ff",
-        border: `1px solid ${isAdmin ? "#fed7aa" : "#bfdbfe"}`,
+        background: isPrivileged ? "#fff7ed" : "#eff6ff",
+        border: `1px solid ${isPrivileged ? "#fed7aa" : "#bfdbfe"}`,
         whiteSpace: "nowrap",
       }}
     >
@@ -132,7 +121,7 @@ const RoleBadge = ({ role }) => {
         sx={{
           fontSize: 12,
           fontWeight: 800,
-          color: isAdmin ? "#c2410c" : "#1d4ed8",
+          color: isPrivileged ? "#c2410c" : "#1d4ed8",
           lineHeight: 1,
           textTransform: "uppercase",
           letterSpacing: ".04em",
@@ -165,31 +154,9 @@ const Navbar = ({ sidebarOpen, onToggleSidebar }) => {
   };
 
   return (
-    <Box
-      sx={{
-        height: NAV_HEIGHT,
-        px: 2,
-        display: "flex",
-        alignItems: "center",
-        gap: 1.5,
-        background: "#ffffff",
-        borderBottom: "1px solid #f1f5f9",
-        boxShadow: "0 1px 4px rgba(15,23,42,.05)",
-        fontFamily: "'Noto Sans', sans-serif",
-        flexShrink: 0,
-      }}
-    >
+    <Box sx={{ height: NAV_HEIGHT, px: 2, display: "flex", alignItems: "center", gap: 1.5, background: "#ffffff", borderBottom: "1px solid #f1f5f9", boxShadow: "0 1px 4px rgba(15,23,42,.05)", fontFamily: "'Noto Sans', sans-serif", flexShrink: 0 }}>
       <Box sx={{ minWidth: 0 }}>
-        <Typography
-          sx={{
-            fontSize: 17,
-            fontWeight: 800,
-            color: "#0f172a",
-            lineHeight: 1.1,
-            letterSpacing: "-.02em",
-            whiteSpace: "nowrap",
-          }}
-        >
+        <Typography sx={{ fontSize: 17, fontWeight: 800, color: "#0f172a", lineHeight: 1.1, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>
           {route.title}
         </Typography>
       </Box>
@@ -203,19 +170,7 @@ const Navbar = ({ sidebarOpen, onToggleSidebar }) => {
           onClick={onToggleSidebar}
           size="small"
           startIcon={sidebarOpen ? <MenuOpenOutlinedIcon sx={{ fontSize: 16 }} /> : <MenuOutlinedIcon sx={{ fontSize: 16 }} />}
-          sx={{
-            minWidth: 72,
-            height: 34,
-            px: 1.2,
-            borderRadius: "8px",
-            textTransform: "none",
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: "#1a56a0",
-            border: "1px solid #dbe5f0",
-            background: "#fff",
-            "&:hover": { background: "#eff6ff" },
-          }}
+          sx={{ minWidth: 72, height: 34, px: 1.2, borderRadius: "8px", textTransform: "none", fontSize: 12.5, fontWeight: 700, color: "#1a56a0", border: "1px solid #dbe5f0", background: "#fff", "&:hover": { background: "#eff6ff" } }}
         >
           Max
         </Button>

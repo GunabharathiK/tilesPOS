@@ -1,7 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-// ✅ Protect — verify JWT
 exports.protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
@@ -22,10 +21,16 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-// ✅ Admin only
 exports.adminOnly = (req, res, next) => {
-  if (req.user?.role !== "admin") {
+  if (!["owner", "admin"].includes(req.user?.role)) {
     return res.status(403).json({ error: "Access denied. Admins only." });
+  }
+  next();
+};
+
+exports.ownerOnly = (req, res, next) => {
+  if (req.user?.role !== "owner") {
+    return res.status(403).json({ error: "Access denied. Owner only." });
   }
   next();
 };

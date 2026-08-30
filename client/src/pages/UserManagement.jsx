@@ -200,7 +200,7 @@ const UserManagement = ({ embedded = false }) => {
             User Management
           </Typography>
           <Typography sx={{ color: "#64748b", fontSize: 13 }}>
-            Add and manage admin/staff accounts
+            Add and manage store admin/staff accounts
           </Typography>
         </Box>
       ) : null}

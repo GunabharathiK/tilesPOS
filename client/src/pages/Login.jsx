@@ -1,18 +1,18 @@
 import { useState } from "react";
 import {
-  Box,
-  Card,
-  TextField,
-  Button,
-  Typography,
-  InputAdornment,
-  IconButton,
   Alert,
-  Link,
+  Box,
+  Button,
+  Card,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  InputAdornment,
+  Link,
+  TextField,
+  Typography,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
@@ -42,7 +42,7 @@ const Login = () => {
   const [forgotError, setForgotError] = useState("");
   const [forgotSuccess, setForgotSuccess] = useState("");
 
-  const { login } = useAuth();
+  const { login, refreshLicenseStatus } = useAuth();
   const navigate = useNavigate();
   const isAdminPhone = phone === ADMIN_PHONE;
 
@@ -115,8 +115,8 @@ const Login = () => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError("");
     setLoading(true);
 
@@ -125,6 +125,11 @@ const Login = () => {
       login(res.data);
       navigate("/");
     } catch (err) {
+      if (err?.response?.status === 403 && err?.response?.data?.licenseStatus) {
+        await refreshLicenseStatus();
+        navigate("/license");
+        return;
+      }
       setError(err?.response?.data?.error || "Login failed. Please try again.");
     } finally {
       setLoading(false);
@@ -184,7 +189,7 @@ const Login = () => {
             fullWidth
             required
             value={phone}
-            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
             sx={{ mb: 3 }}
             autoComplete="tel"
             inputProps={{ maxLength: 10 }}
@@ -196,7 +201,7 @@ const Login = () => {
             fullWidth
             required
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             sx={{ mb: 3 }}
             autoComplete="current-password"
             InputProps={{
@@ -209,6 +214,7 @@ const Login = () => {
               ),
             }}
           />
+
           {isAdminPhone && (
             <Box sx={{ mb: 2, textAlign: "right" }}>
               <Link component="button" type="button" onClick={handleOpenForgot} underline="hover" sx={{ fontSize: 13 }}>
@@ -236,6 +242,10 @@ const Login = () => {
             }}
           >
             {loading ? "Logging in..." : "Login"}
+          </Button>
+
+          <Button onClick={() => navigate("/license")} fullWidth sx={{ mt: 1.5 }}>
+            License & Trial Status
           </Button>
         </Box>
 
@@ -265,7 +275,7 @@ const Login = () => {
                   label="OTP"
                   fullWidth
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(event) => setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -273,7 +283,7 @@ const Login = () => {
                   type="password"
                   fullWidth
                   value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(event) => setNewPassword(event.target.value)}
                   sx={{ mb: 2 }}
                 />
                 <TextField
@@ -281,7 +291,7 @@ const Login = () => {
                   type="password"
                   fullWidth
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
                 />
               </>
             )}
